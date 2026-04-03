@@ -169,10 +169,6 @@ where
         self.process_runtime(event_loop);
     }
 
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        self.process_runtime(event_loop);
-    }
-
     fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
         let Some(window) = self.window.as_ref() else {
             return;
@@ -221,6 +217,10 @@ where
             }
             _ => {}
         }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        self.process_runtime(event_loop);
     }
 
     fn exiting(&mut self, event_loop: &ActiveEventLoop) {
