@@ -1,0 +1,24 @@
+[workspace]
+members = [
+  "crates/widgetkit-core",
+  "crates/widgetkit-runtime",
+  "crates/widgetkit-render",
+  "crates/widgetkit-host-windows",
+  "crates/widgetkit",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+crossbeam-channel = "0.5"
+font8x8 = "0.3"
+futures = "0.3"
+softbuffer = "0.4"
+tokio = { version = "1", features = ["rt-multi-thread", "time"] }
+winit = "0.30"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }

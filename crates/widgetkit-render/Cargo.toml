@@ -1,0 +1,10 @@
+[package]
+name = "widgetkit-render"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+font8x8.workspace = true
+widgetkit-core = { path = "../widgetkit-core" }
