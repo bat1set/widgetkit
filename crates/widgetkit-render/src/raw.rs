@@ -2,6 +2,8 @@ use crate::{Stroke, TextStyle};
 use font8x8::{BASIC_FONTS, UnicodeFonts};
 use widgetkit_core::{Color, Point, Rect, Size};
 
+/// Internal unstable raw render foundation for v0.1.
+/// This module backs `Canvas` but is intentionally not re-exported by the top-level crate.
 #[derive(Debug)]
 pub(crate) struct Scene {
     pub size: Size,
@@ -29,25 +31,74 @@ pub(crate) enum Command {
     ImagePlaceholder { rect: Rect, color: Color },
 }
 
-pub(crate) struct Rasterizer<'a> {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ClipState {
+    rect: Option<Rect>,
+}
+
+impl ClipState {
+    pub(crate) const fn none() -> Self {
+        Self { rect: None }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct TransformState {
+    pub depth: usize,
+}
+
+pub(crate) struct Frame<'a> {
     width: u32,
     height: u32,
     pixels: &'a mut [Color],
+    clip: ClipState,
+    transforms: TransformState,
 }
 
-impl<'a> Rasterizer<'a> {
+impl<'a> Frame<'a> {
     pub(crate) fn new(width: u32, height: u32, pixels: &'a mut [Color]) -> Self {
         Self {
             width,
             height,
             pixels,
+            clip: ClipState::none(),
+            transforms: TransformState::default(),
         }
+    }
+
+    pub(crate) fn size(&self) -> Size {
+        Size::new(self.width as f32, self.height as f32)
+    }
+
+    fn pixels_mut(&mut self) -> &mut [Color] {
+        self.pixels
+    }
+
+    fn clip(&self) -> ClipState {
+        self.clip
+    }
+
+    fn transforms(&self) -> TransformState {
+        self.transforms
+    }
+}
+
+pub(crate) struct Rasterizer<'a> {
+    frame: Frame<'a>,
+}
+
+impl<'a> Rasterizer<'a> {
+    pub(crate) fn new(frame: Frame<'a>) -> Self {
+        Self { frame }
     }
 
     pub(crate) fn execute(&mut self, scene: Scene) {
         let _ = scene.size;
-        // TODO(v0.2): add clipping model
-        // TODO(v0.2): add transform stack
+        let _ = self.frame.size();
+        let _ = self.frame.clip();
+        let _ = self.frame.transforms();
+        // TODO(v0.2): wire Canvas clip commands into ClipState
+        // TODO(v0.2): apply TransformState once Canvas exposes transforms
         // TODO(v0.8): add debug paint/invalidation instrumentation
         for command in scene.commands {
             match command {
@@ -77,7 +128,7 @@ impl<'a> Rasterizer<'a> {
     }
 
     fn clear(&mut self, color: Color) {
-        self.pixels.fill(color);
+        self.frame.pixels_mut().fill(color);
     }
 
     fn fill_rect(&mut self, rect: Rect, color: Color) {
@@ -129,6 +180,7 @@ impl<'a> Rasterizer<'a> {
     }
 
     fn draw_text(&mut self, position: Point, text: &str, size: f32, color: Color) {
+        // TODO(v0.2): replace bitmap font rendering with a real text layout/rasterization path.
         let scale = (size / 8.0).round().max(1.0) as i32;
         let glyph_advance = 8 * scale;
         let mut cursor_x = position.x.round() as i32;
@@ -155,53 +207,23 @@ impl<'a> Rasterizer<'a> {
     }
 
     fn draw_image_placeholder(&mut self, rect: Rect, color: Color) {
-        self.draw_line(
-            Point::new(rect.x(), rect.y()),
-            Point::new(rect.right(), rect.y()),
-            1.0,
-            color,
-        );
-        self.draw_line(
-            Point::new(rect.right(), rect.y()),
-            Point::new(rect.right(), rect.bottom()),
-            1.0,
-            color,
-        );
-        self.draw_line(
-            Point::new(rect.right(), rect.bottom()),
-            Point::new(rect.x(), rect.bottom()),
-            1.0,
-            color,
-        );
-        self.draw_line(
-            Point::new(rect.x(), rect.bottom()),
-            Point::new(rect.x(), rect.y()),
-            1.0,
-            color,
-        );
-        self.draw_line(
-            Point::new(rect.x(), rect.y()),
-            Point::new(rect.right(), rect.bottom()),
-            1.0,
-            color,
-        );
-        self.draw_line(
-            Point::new(rect.right(), rect.y()),
-            Point::new(rect.x(), rect.bottom()),
-            1.0,
-            color,
-        );
+        self.draw_line(Point::new(rect.x(), rect.y()), Point::new(rect.right(), rect.y()), 1.0, color);
+        self.draw_line(Point::new(rect.right(), rect.y()), Point::new(rect.right(), rect.bottom()), 1.0, color);
+        self.draw_line(Point::new(rect.right(), rect.bottom()), Point::new(rect.x(), rect.bottom()), 1.0, color);
+        self.draw_line(Point::new(rect.x(), rect.bottom()), Point::new(rect.x(), rect.y()), 1.0, color);
+        self.draw_line(Point::new(rect.x(), rect.y()), Point::new(rect.right(), rect.bottom()), 1.0, color);
+        self.draw_line(Point::new(rect.right(), rect.y()), Point::new(rect.x(), rect.bottom()), 1.0, color);
     }
 
     fn for_each_pixel(&mut self, rect: Rect, mut draw: impl FnMut(i32, i32, &mut Color)) {
         let min_x = rect.x().floor().max(0.0) as i32;
         let min_y = rect.y().floor().max(0.0) as i32;
-        let max_x = rect.right().ceil().min(self.width as f32) as i32;
-        let max_y = rect.bottom().ceil().min(self.height as f32) as i32;
+        let max_x = rect.right().ceil().min(self.frame.width as f32) as i32;
+        let max_y = rect.bottom().ceil().min(self.frame.height as f32) as i32;
         for y in min_y..max_y {
             for x in min_x..max_x {
-                let index = y as usize * self.width as usize + x as usize;
-                draw(x, y, &mut self.pixels[index]);
+                let index = y as usize * self.frame.width as usize + x as usize;
+                draw(x, y, &mut self.frame.pixels_mut()[index]);
             }
         }
     }

@@ -1,8 +1,15 @@
-use crate::{context::{DisposeCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx}, event::Event, host::HostRunner, internal::{Dispatcher, RuntimeEvent, RuntimeServices, WakeHandle}, widget::Widget};
+use crate::{
+    context::{DisposeCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx},
+    event::Event,
+    host::HostRunner,
+    internal::{DispatchToken, Dispatcher, RuntimeEvent, RuntimeServices, WakeHandle},
+    widget::Widget,
+};
 use crossbeam_channel::{Receiver, TryRecvError, unbounded};
-use widgetkit_core::{HostEvent, InstanceId, Result, Size, WidgetId};
+use widgetkit_core::{Error, HostEvent, InstanceId, Result, Size, WidgetId};
 use widgetkit_render::{Canvas, RenderSurface, Renderer};
 
+/// v0.1 application bootstrap for a single widget instance bound to one host and one renderer.
 pub struct WidgetApp<W = (), H = (), R = ()> {
     widget_name: Option<String>,
     widget: Option<W>,
@@ -85,6 +92,7 @@ impl Default for WidgetApp<(), (), ()> {
     }
 }
 
+/// v0.1 runtime runner. It intentionally manages exactly one widget instance lifetime.
 pub struct AppRunner<W, R>
 where
     W: Widget,
@@ -93,6 +101,7 @@ where
     widget_name: String,
     widget_id: WidgetId,
     instance_id: InstanceId,
+    instance_generation: u64,
     widget: W,
     state: Option<W::State>,
     renderer: R,
@@ -111,12 +120,19 @@ where
     pub fn new(widget_name: impl Into<String>, widget: W, renderer: R) -> Self {
         let (sender, receiver) = unbounded();
         let wake = WakeHandle::default();
-        let dispatcher = Dispatcher { sender, wake };
+        let instance_id = InstanceId::new();
+        let instance_generation = 1;
+        let dispatcher = Dispatcher {
+            sender,
+            wake,
+            token: DispatchToken::new(instance_id, instance_generation),
+        };
         let services = RuntimeServices::new(dispatcher);
         Self {
             widget_name: widget_name.into(),
             widget_id: WidgetId::new(),
-            instance_id: InstanceId::new(),
+            instance_id,
+            instance_generation,
             widget,
             state: None,
             renderer,
@@ -151,6 +167,11 @@ where
     }
 
     pub fn initialize(&mut self, surface_size: Size) -> Result<()> {
+        if self.shut_down {
+            return Err(Error::message(
+                "widgetkit v0.1 AppRunner supports a single widget instance lifetime",
+            ));
+        }
         if self.initialized {
             return Ok(());
         }
@@ -173,8 +194,21 @@ where
     pub fn process_pending(&mut self) -> Result<()> {
         loop {
             match self.receiver.try_recv() {
-                Ok(RuntimeEvent::Message(message)) => self.dispatch_event(Event::Message(message)),
-                Ok(RuntimeEvent::TaskFinished(task_id)) => self.services.tasks.reap(task_id),
+                Ok(RuntimeEvent::Message(envelope)) => {
+                    if self.accepts_token(envelope.token) {
+                        self.dispatch_event(Event::Message(envelope.message));
+                    }
+                }
+                Ok(RuntimeEvent::TaskFinished { token, task_id }) => {
+                    if self.matches_token(token) {
+                        self.services.tasks.reap(task_id);
+                    }
+                }
+                Ok(RuntimeEvent::TimerFinished { token, timer_id }) => {
+                    if self.matches_token(token) {
+                        self.services.scheduler.reap(timer_id);
+                    }
+                }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => break,
             }
@@ -215,12 +249,14 @@ where
             let mut ctx = StopCtx::new(widget_id, instance_id, std::ptr::NonNull::from(services));
             widget.stop(state, &mut ctx);
         });
-        self.services.scheduler.clear();
-        self.services.tasks.cancel_all();
+        self.services.scheduler.shutdown();
+        self.services.tasks.shutdown();
         if let Some(state) = self.state.take() {
             let mut ctx = DisposeCtx::new(self.widget_id, self.instance_id);
             self.widget.dispose(state, &mut ctx);
         }
+        self.instance_generation += 1;
+        self.initialized = false;
         self.shut_down = true;
         Ok(())
     }
@@ -235,6 +271,42 @@ where
             let mut ctx = UpdateCtx::new(widget_id, instance_id, std::ptr::NonNull::from(services));
             widget.update(state, event, &mut ctx);
         });
+    }
+
+    fn accepts_token(&self, token: DispatchToken) -> bool {
+        self.initialized && !self.shut_down && self.matches_token(token)
+    }
+
+    fn matches_token(&self, token: DispatchToken) -> bool {
+        token == self.current_dispatch_token()
+    }
+
+    fn current_dispatch_token(&self) -> DispatchToken {
+        DispatchToken::new(self.instance_id, self.instance_generation)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn scheduler_active_count(&self) -> usize {
+        self.services.scheduler.active_count()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn task_active_count(&self) -> usize {
+        self.services.tasks.active_count()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_token(&self) -> DispatchToken {
+        self.services.dispatcher.token
+    }
+
+    #[cfg(test)]
+    pub(crate) fn dispatch_test_message(&self, token: DispatchToken, message: W::Message) {
+        let _ = self
+            .services
+            .dispatcher
+            .sender
+            .send(RuntimeEvent::Message(crate::internal::MessageEnvelope { token, message }));
     }
 
     fn with_state_mut(

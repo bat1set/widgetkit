@@ -1,7 +1,28 @@
 use crate::{scheduler::SchedulerState, tasks::{TaskBackend, task_backend}};
 use crossbeam_channel::Sender;
 use std::sync::{Arc, Mutex};
-use widgetkit_core::TaskId;
+use widgetkit_core::{InstanceId, TaskId, TimerId};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct DispatchToken {
+    pub(crate) instance_id: InstanceId,
+    pub(crate) generation: u64,
+}
+
+impl DispatchToken {
+    pub(crate) const fn new(instance_id: InstanceId, generation: u64) -> Self {
+        Self {
+            instance_id,
+            generation,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct MessageEnvelope<M> {
+    pub(crate) token: DispatchToken,
+    pub(crate) message: M,
+}
 
 pub(crate) struct RuntimeServices<M> {
     pub(crate) dispatcher: Dispatcher<M>,
@@ -17,7 +38,7 @@ where
     pub(crate) fn new(dispatcher: Dispatcher<M>) -> Self {
         Self {
             dispatcher: dispatcher.clone(),
-            scheduler: SchedulerState::new(),
+            scheduler: SchedulerState::new(dispatcher.clone()),
             tasks: task_backend(dispatcher),
             render_requested: true,
         }
@@ -25,8 +46,9 @@ where
 }
 
 pub(crate) enum RuntimeEvent<M> {
-    Message(M),
-    TaskFinished(TaskId),
+    Message(MessageEnvelope<M>),
+    TaskFinished { token: DispatchToken, task_id: TaskId },
+    TimerFinished { token: DispatchToken, timer_id: TimerId },
 }
 
 #[derive(Clone, Default)]
@@ -53,6 +75,7 @@ impl WakeHandle {
 pub(crate) struct Dispatcher<M> {
     pub(crate) sender: Sender<RuntimeEvent<M>>,
     pub(crate) wake: WakeHandle,
+    pub(crate) token: DispatchToken,
 }
 
 impl<M> Clone for Dispatcher<M> {
@@ -60,6 +83,7 @@ impl<M> Clone for Dispatcher<M> {
         Self {
             sender: self.sender.clone(),
             wake: self.wake.clone(),
+            token: self.token,
         }
     }
 }
@@ -69,7 +93,11 @@ where
     M: Send + 'static,
 {
     pub(crate) fn post_message(&self, message: M) -> bool {
-        if self.sender.send(RuntimeEvent::Message(message)).is_ok() {
+        let envelope = MessageEnvelope {
+            token: self.token,
+            message,
+        };
+        if self.sender.send(RuntimeEvent::Message(envelope)).is_ok() {
             self.wake.wake();
             return true;
         }
@@ -77,7 +105,27 @@ where
     }
 
     pub(crate) fn finish_task(&self, task_id: TaskId) {
-        if self.sender.send(RuntimeEvent::TaskFinished(task_id)).is_ok() {
+        if self
+            .sender
+            .send(RuntimeEvent::TaskFinished {
+                token: self.token,
+                task_id,
+            })
+            .is_ok()
+        {
+            self.wake.wake();
+        }
+    }
+
+    pub(crate) fn finish_timer(&self, timer_id: TimerId) {
+        if self
+            .sender
+            .send(RuntimeEvent::TimerFinished {
+                token: self.token,
+                timer_id,
+            })
+            .is_ok()
+        {
             self.wake.wake();
         }
     }

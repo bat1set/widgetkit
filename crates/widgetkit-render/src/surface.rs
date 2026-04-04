@@ -1,5 +1,4 @@
-use crate::Canvas;
-use crate::raw::Rasterizer;
+use crate::{Canvas, raw::{Frame, Rasterizer}};
 use widgetkit_core::{Color, Error, Result};
 
 pub trait RenderSurface {
@@ -43,8 +42,10 @@ impl Renderer for SoftwareRenderer {
         let (width, height) = surface.size();
         self.ensure_buffer(width, height)?;
         let scene = canvas.into_scene();
-        let mut raster = Rasterizer::new(width, height, &mut self.pixels);
+        let frame = Frame::new(width, height, &mut self.pixels);
+        let mut raster = Rasterizer::new(frame);
         raster.execute(scene);
+        drop(raster);
         surface.present(&self.pixels)
     }
 }

@@ -1,5 +1,13 @@
-use crate::{AppRunner, DisposeCtx, Event, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx, Widget};
-use std::{sync::{Arc, Mutex}, thread, time::Duration as StdDuration};
+use crate::{
+    AppRunner, DisposeCtx, Event, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx, Widget,
+    internal::DispatchToken,
+};
+use futures::future;
+use std::{
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration as StdDuration,
+};
 use widgetkit_core::{Color, Point, Rect, Result, Size};
 use widgetkit_render::{Canvas, RenderSurface, SoftwareRenderer, TextStyle};
 
@@ -130,21 +138,22 @@ impl Widget for SchedulerWidget {
 }
 
 #[test]
-fn scheduler_routes_messages_and_stop_cancels_future_ticks() {
+fn scheduler_routes_messages_and_reaps_completed_timers() {
     let counts = Arc::new(Mutex::new((0, 0)));
     let widget = SchedulerWidget { counts: Arc::clone(&counts) };
     let mut runner = AppRunner::new("scheduler", widget, SoftwareRenderer::new());
     runner.initialize(Size::new(32.0, 32.0)).unwrap();
+    assert_eq!(runner.scheduler_active_count(), 2);
+
     thread::sleep(StdDuration::from_millis(18));
     runner.process_pending().unwrap();
-    let before_shutdown = *counts.lock().unwrap();
-    assert_eq!(before_shutdown.0, 1);
-    assert!(before_shutdown.1 >= 2);
+    let snapshot = *counts.lock().unwrap();
+    assert_eq!(snapshot.0, 1);
+    assert!(snapshot.1 >= 1);
+    assert_eq!(runner.scheduler_active_count(), 1);
 
     runner.shutdown().unwrap();
-    thread::sleep(StdDuration::from_millis(15));
-    runner.process_pending().unwrap();
-    assert_eq!(*counts.lock().unwrap(), before_shutdown);
+    assert_eq!(runner.scheduler_active_count(), 0);
 }
 
 struct TaskWidget {
@@ -183,4 +192,72 @@ fn task_backend_routes_completions_to_widget_messages() {
     runner.shutdown().unwrap();
 
     assert_eq!(*hits.lock().unwrap(), 1);
+    assert_eq!(runner.task_active_count(), 0);
+}
+
+struct PendingTaskWidget;
+
+enum PendingTaskMsg {}
+
+impl Widget for PendingTaskWidget {
+    type State = ();
+    type Message = PendingTaskMsg;
+
+    fn mount(&mut self, _ctx: &mut MountCtx<Self>) -> Self::State {}
+
+    fn start(&mut self, _state: &mut Self::State, ctx: &mut StartCtx<Self>) {
+        ctx.tasks().spawn(async { future::pending::<PendingTaskMsg>().await });
+    }
+}
+
+#[test]
+fn shutdown_cleans_up_pending_tasks() {
+    let mut runner = AppRunner::new("pending-tasks", PendingTaskWidget, SoftwareRenderer::new());
+    runner.initialize(Size::new(32.0, 32.0)).unwrap();
+    assert_eq!(runner.task_active_count(), 1);
+
+    runner.shutdown().unwrap();
+    assert_eq!(runner.task_active_count(), 0);
+}
+
+struct GuardWidget {
+    hits: Arc<Mutex<u32>>,
+}
+
+enum GuardMsg {
+    Hit,
+}
+
+impl Widget for GuardWidget {
+    type State = ();
+    type Message = GuardMsg;
+
+    fn mount(&mut self, _ctx: &mut MountCtx<Self>) -> Self::State {}
+
+    fn update(&mut self, _state: &mut Self::State, event: Event<Self::Message>, _ctx: &mut UpdateCtx<Self>) {
+        if let Event::Message(GuardMsg::Hit) = event {
+            *self.hits.lock().unwrap() += 1;
+        }
+    }
+}
+
+#[test]
+fn stale_instance_messages_are_ignored_after_shutdown() {
+    let hits = Arc::new(Mutex::new(0));
+    let widget = GuardWidget { hits: Arc::clone(&hits) };
+    let mut runner = AppRunner::new("guard", widget, SoftwareRenderer::new());
+    runner.initialize(Size::new(32.0, 32.0)).unwrap();
+    let stale_token = runner.test_token();
+    runner.shutdown().unwrap();
+    runner.dispatch_test_message(stale_token, GuardMsg::Hit);
+    runner.process_pending().unwrap();
+
+    assert_eq!(*hits.lock().unwrap(), 0);
+}
+
+#[test]
+fn stale_generation_token_does_not_match_current_runtime() {
+    let token = DispatchToken::new(widgetkit_core::InstanceId::new(), 1);
+    let next_generation = DispatchToken::new(token.instance_id, 2);
+    assert_ne!(token, next_generation);
 }

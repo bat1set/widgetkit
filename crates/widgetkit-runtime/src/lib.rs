@@ -1,3 +1,6 @@
+//! Lifecycle-driven runtime for WidgetKit v0.1.
+//! The current runtime scope is intentionally a single widget instance per app/host pair.
+
 mod app;
 mod context;
 mod event;

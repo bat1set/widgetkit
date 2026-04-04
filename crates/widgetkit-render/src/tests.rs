@@ -1,6 +1,6 @@
-use crate::{Canvas, RenderSurface, SoftwareRenderer, Stroke, TextStyle};
+use crate::{Canvas, RenderSurface, SoftwareRenderer, Stroke, TextStyle, raw::Command};
 use widgetkit_core::Result;
-use widgetkit_core::{Color, Point, Rect};
+use widgetkit_core::{Color, Point, Rect, Size};
 
 #[derive(Default)]
 struct MemorySurface {
@@ -30,8 +30,29 @@ impl RenderSurface for MemorySurface {
 }
 
 #[test]
+fn canvas_builds_expected_command_sequence() {
+    let mut canvas = Canvas::new(Size::new(64.0, 64.0));
+    canvas.clear(Color::BLACK);
+    canvas.rect(Rect::xywh(1.0, 2.0, 3.0, 4.0), Color::rgb(255, 0, 0));
+    canvas.line(
+        Point::new(0.0, 0.0),
+        Point::new(5.0, 5.0),
+        Stroke::new(2.0),
+        Color::WHITE,
+    );
+    canvas.text(Point::new(2.0, 3.0), "ok", TextStyle::new(), Color::WHITE);
+
+    let scene = canvas.into_scene();
+    assert_eq!(scene.commands.len(), 4);
+    assert!(matches!(scene.commands[0], Command::Clear { .. }));
+    assert!(matches!(scene.commands[1], Command::Rect { .. }));
+    assert!(matches!(scene.commands[2], Command::Line { .. }));
+    assert!(matches!(scene.commands[3], Command::Text { .. }));
+}
+
+#[test]
 fn canvas_emits_commands_and_renderer_draws_pixels() {
-    let mut canvas = Canvas::new(widgetkit_core::Size::new(64.0, 64.0));
+    let mut canvas = Canvas::new(Size::new(64.0, 64.0));
     canvas.clear(Color::BLACK);
     canvas.rect(Rect::xywh(4.0, 4.0, 20.0, 10.0), Color::rgb(255, 0, 0));
     canvas.round_rect(Rect::xywh(30.0, 4.0, 20.0, 20.0), 6.0, Color::rgb(0, 255, 0));
@@ -57,7 +78,7 @@ fn canvas_emits_commands_and_renderer_draws_pixels() {
 
 #[test]
 fn image_placeholder_marks_target_area() {
-    let mut canvas = Canvas::new(widgetkit_core::Size::new(32.0, 32.0));
+    let mut canvas = Canvas::new(Size::new(32.0, 32.0));
     canvas.clear(Color::BLACK);
     canvas.image_placeholder(Rect::xywh(4.0, 4.0, 20.0, 20.0), Color::WHITE);
 

@@ -49,6 +49,9 @@ pub(crate) trait TaskBackend<M>: Send {
     fn cancel(&mut self, task_id: TaskId) -> bool;
     fn cancel_all(&mut self);
     fn reap(&mut self, task_id: TaskId);
+    fn shutdown(&mut self);
+    #[cfg(test)]
+    fn active_count(&self) -> usize;
 }
 
 pub(crate) fn task_backend<M>(dispatcher: Dispatcher<M>) -> Box<dyn TaskBackend<M>>
@@ -70,6 +73,7 @@ where
 struct DefaultTaskBackend<M> {
     dispatcher: Dispatcher<M>,
     tasks: HashMap<TaskId, DefaultTaskControl>,
+    shutting_down: bool,
 }
 
 #[cfg(not(feature = "runtime-tokio"))]
@@ -88,7 +92,16 @@ where
         Self {
             dispatcher,
             tasks: HashMap::new(),
+            shutting_down: false,
         }
+    }
+
+    fn close(&mut self) {
+        if self.shutting_down {
+            return;
+        }
+        self.shutting_down = true;
+        self.cancel_all();
     }
 }
 
@@ -99,6 +112,12 @@ where
 {
     fn spawn_boxed(&mut self, name: Option<String>, future: BoxedFuture<M>) -> TaskId {
         let task_id = TaskId::new();
+        if self.shutting_down {
+            drop(future);
+            self.dispatcher.finish_task(task_id);
+            return task_id;
+        }
+
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
         let dispatcher = self.dispatcher.clone();
         thread::spawn(move || {
@@ -129,6 +148,25 @@ where
     fn reap(&mut self, task_id: TaskId) {
         let _ = self.tasks.remove(&task_id);
     }
+
+    fn shutdown(&mut self) {
+        self.close();
+    }
+
+    #[cfg(test)]
+    fn active_count(&self) -> usize {
+        self.tasks.len()
+    }
+}
+
+#[cfg(not(feature = "runtime-tokio"))]
+impl<M> Drop for DefaultTaskBackend<M> {
+    fn drop(&mut self) {
+        self.shutting_down = true;
+        for (_, control) in self.tasks.drain() {
+            control.abort_handle.abort();
+        }
+    }
 }
 
 #[cfg(feature = "runtime-tokio")]
@@ -136,6 +174,7 @@ struct TokioTaskBackend<M> {
     dispatcher: Dispatcher<M>,
     runtime: tokio::runtime::Runtime,
     tasks: HashMap<TaskId, TokioTaskControl>,
+    shutting_down: bool,
 }
 
 #[cfg(feature = "runtime-tokio")]
@@ -159,7 +198,16 @@ where
             dispatcher,
             runtime,
             tasks: HashMap::new(),
+            shutting_down: false,
         }
+    }
+
+    fn close(&mut self) {
+        if self.shutting_down {
+            return;
+        }
+        self.shutting_down = true;
+        self.cancel_all();
     }
 }
 
@@ -170,6 +218,12 @@ where
 {
     fn spawn_boxed(&mut self, name: Option<String>, future: BoxedFuture<M>) -> TaskId {
         let task_id = TaskId::new();
+        if self.shutting_down {
+            drop(future);
+            self.dispatcher.finish_task(task_id);
+            return task_id;
+        }
+
         let dispatcher = self.dispatcher.clone();
         let join_handle = self.runtime.spawn(async move {
             let message = future.await;
@@ -196,5 +250,24 @@ where
 
     fn reap(&mut self, task_id: TaskId) {
         let _ = self.tasks.remove(&task_id);
+    }
+
+    fn shutdown(&mut self) {
+        self.close();
+    }
+
+    #[cfg(test)]
+    fn active_count(&self) -> usize {
+        self.tasks.len()
+    }
+}
+
+#[cfg(feature = "runtime-tokio")]
+impl<M> Drop for TokioTaskBackend<M> {
+    fn drop(&mut self) {
+        self.shutting_down = true;
+        for (_, control) in self.tasks.drain() {
+            control.join_handle.abort();
+        }
     }
 }
