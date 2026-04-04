@@ -129,7 +129,6 @@ impl<'a> Rasterizer<'a> {
     }
 
     fn draw_text(&mut self, position: Point, text: &str, size: f32, color: Color) {
-        // v0.1 text uses the built-in 8x8 bitmap table from `font8x8::BASIC_FONTS`.
         let scale = (size / 8.0).round().max(1.0) as i32;
         let glyph_advance = 8 * scale;
         let mut cursor_x = position.x.round() as i32;
