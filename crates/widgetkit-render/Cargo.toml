@@ -4,7 +4,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+description = "Canvas API and software renderer for WidgetKit."
+repository.workspace = true
+readme = "../../README.md"
+keywords = ["widgets", "rendering", "canvas", "gui", "desktop"]
+categories = ["gui", "rendering"]
 
 [dependencies]
 font8x8.workspace = true
-widgetkit-core = { path = "../widgetkit-core" }
+widgetkit-core = { version = "0.1.0", path = "../widgetkit-core" }

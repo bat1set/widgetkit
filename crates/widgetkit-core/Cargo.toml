@@ -4,5 +4,10 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+description = "Core types, geometry, and shared primitives for WidgetKit."
+repository.workspace = true
+readme = "../../README.md"
+keywords = ["widgets", "gui", "geometry", "desktop", "canvas"]
+categories = ["gui"]
 
 [dependencies]

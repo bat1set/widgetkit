@@ -4,10 +4,15 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+description = "Windows host implementation for WidgetKit using winit and softbuffer."
+repository.workspace = true
+readme = "../../README.md"
+keywords = ["widgets", "windows", "gui", "desktop", "winit"]
+categories = ["gui", "os::windows-apis"]
 
 [dependencies]
 softbuffer.workspace = true
 winit.workspace = true
-widgetkit-core = { path = "../widgetkit-core" }
-widgetkit-render = { path = "../widgetkit-render" }
-widgetkit-runtime = { path = "../widgetkit-runtime" }
+widgetkit-core = { version = "0.1.0", path = "../widgetkit-core" }
+widgetkit-render = { version = "0.1.0", path = "../widgetkit-render" }
+widgetkit-runtime = { version = "0.1.0", path = "../widgetkit-runtime" }

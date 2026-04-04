@@ -4,6 +4,11 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+description = "Modular Rust framework for building desktop widgets."
+repository.workspace = true
+readme = "../../README.md"
+keywords = ["widgets", "gui", "desktop", "windows", "canvas"]
+categories = ["gui", "rendering"]
 
 [features]
 default = []
@@ -12,10 +17,10 @@ windows = ["canvas", "dep:widgetkit-host-windows"]
 runtime-tokio = ["canvas", "widgetkit-runtime/runtime-tokio"]
 
 [dependencies]
-widgetkit-core = { path = "../widgetkit-core", optional = true }
-widgetkit-render = { path = "../widgetkit-render", optional = true }
-widgetkit-runtime = { path = "../widgetkit-runtime", optional = true, default-features = false }
-widgetkit-host-windows = { path = "../widgetkit-host-windows", optional = true }
+widgetkit-core = { version = "0.1.0", path = "../widgetkit-core", optional = true }
+widgetkit-render = { version = "0.1.0", path = "../widgetkit-render", optional = true }
+widgetkit-runtime = { version = "0.1.0", path = "../widgetkit-runtime", optional = true, default-features = false }
+widgetkit-host-windows = { version = "0.1.0", path = "../widgetkit-host-windows", optional = true }
 
 [dev-dependencies]
 chrono.workspace = true

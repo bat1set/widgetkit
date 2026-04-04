@@ -4,6 +4,11 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+description = "Lifecycle-driven runtime, scheduler, and task model for WidgetKit."
+repository.workspace = true
+readme = "../../README.md"
+keywords = ["widgets", "runtime", "scheduler", "gui", "desktop"]
+categories = ["gui", "asynchronous"]
 
 [features]
 default = []
@@ -13,5 +18,5 @@ runtime-tokio = ["dep:tokio"]
 crossbeam-channel.workspace = true
 futures.workspace = true
 tokio = { workspace = true, optional = true }
-widgetkit-core = { path = "../widgetkit-core" }
-widgetkit-render = { path = "../widgetkit-render" }
+widgetkit-core = { version = "0.1.0", path = "../widgetkit-core" }
+widgetkit-render = { version = "0.1.0", path = "../widgetkit-render" }
