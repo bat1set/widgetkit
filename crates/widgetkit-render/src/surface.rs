@@ -1,4 +1,4 @@
-use crate::{Canvas, raw::{Frame, Rasterizer}};
+use crate::{Canvas, frame::Frame, raster::Rasterizer};
 use widgetkit_core::{Color, Error, Result};
 
 pub trait RenderSurface {
