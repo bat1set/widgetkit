@@ -74,11 +74,15 @@ where
         services.dispatcher.wake.wake();
     }
 
+    /// Returns the scheduler owned by the current widget instance.
+    /// All timers created here are cleared when the instance stops or is disposed.
     pub fn scheduler(&mut self) -> Scheduler<'_, W::Message> {
         let services = self.services_mut();
         Scheduler::new(&mut services.scheduler, services.dispatcher.clone())
     }
 
+    /// Returns the task backend owned by the current widget instance.
+    /// All tasks created here are canceled when the instance stops or is disposed.
     pub fn tasks(&mut self) -> Tasks<'_, W::Message> {
         let services = self.services_mut();
         Tasks::new(services.tasks.as_mut())
@@ -131,11 +135,15 @@ where
         services.dispatcher.wake.wake();
     }
 
+    /// Returns the scheduler owned by the current widget instance.
+    /// All timers created here are cleared when the instance stops or is disposed.
     pub fn scheduler(&mut self) -> Scheduler<'_, W::Message> {
         let services = self.services_mut();
         Scheduler::new(&mut services.scheduler, services.dispatcher.clone())
     }
 
+    /// Returns the task backend owned by the current widget instance.
+    /// All tasks created here are canceled when the instance stops or is disposed.
     pub fn tasks(&mut self) -> Tasks<'_, W::Message> {
         let services = self.services_mut();
         Tasks::new(services.tasks.as_mut())
@@ -213,11 +221,15 @@ where
         self.instance_id
     }
 
+    /// Returns the scheduler owned by the current widget instance.
+    /// All timers created here are cleared when the instance stops or is disposed.
     pub fn scheduler(&mut self) -> Scheduler<'_, W::Message> {
         let services = self.services_mut();
         Scheduler::new(&mut services.scheduler, services.dispatcher.clone())
     }
 
+    /// Returns the task backend owned by the current widget instance.
+    /// All tasks created here are canceled when the instance stops or is disposed.
     pub fn tasks(&mut self) -> Tasks<'_, W::Message> {
         let services = self.services_mut();
         Tasks::new(services.tasks.as_mut())

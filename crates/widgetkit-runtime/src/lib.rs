@@ -1,5 +1,7 @@
 //! Lifecycle-driven runtime for WidgetKit v0.1.
 //! The current runtime scope is intentionally a single widget instance per app/host pair.
+//! All timers and background tasks belong to that widget instance and are shut down with it.
+//! Rendering is demand-driven: hosts redraw only after the runtime requests it.
 
 mod app;
 mod context;
@@ -21,7 +23,7 @@ pub use widget::Widget;
 pub use widgetkit_core;
 pub use widgetkit_render;
 
-// TODO(v0.2): add widget instance generation guards for stale messages
+// TODO(v0.2): harden widget instance generation guards across restart/reload boundaries
 // TODO(v0.7): allow lifecycle integration with hybrid/native-web host
 // TODO(v0.8): support restart-safe instance isolation guarantees
 // TODO(v0.2): named task handles

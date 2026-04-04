@@ -153,6 +153,9 @@ fn scheduler_routes_messages_and_reaps_completed_timers() {
     assert_eq!(runner.scheduler_active_count(), 1);
 
     runner.shutdown().unwrap();
+    thread::sleep(StdDuration::from_millis(12));
+    runner.process_pending().unwrap();
+    assert_eq!(*counts.lock().unwrap(), snapshot);
     assert_eq!(runner.scheduler_active_count(), 0);
 }
 
