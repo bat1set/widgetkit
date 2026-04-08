@@ -1,9 +1,10 @@
 use crate::frame::{Frame, intersect_rect};
 use crate::model::{
-    ClearCommand, ClipCommand, ClipPrimitive, DrawCommand, FillCommand, FillShape, ImageCommand,
-    ImageSource, RenderScene, StateCommand, StrokeCommand, StrokeShape, TextCommand,
+    ClearCommand, ClipCommand, ClipPrimitive, FillCommand, FillShape, ImageCommand, ImageSource,
+    RenderCommand, RenderFrame, StateCommand, StrokeCommand, StrokeShape, TextCommand,
     TransformCommand,
 };
+use crate::text::TextLayout;
 use font8x8::{BASIC_FONTS, UnicodeFonts};
 use widgetkit_core::{Color, Point, Rect};
 
@@ -16,21 +17,21 @@ impl<'a> Rasterizer<'a> {
         Self { frame }
     }
 
-    pub(crate) fn execute(&mut self, scene: RenderScene) {
-        let _ = scene.size();
+    pub(crate) fn execute(&mut self, frame: RenderFrame) {
+        let _ = frame.size();
         let _ = self.frame.size();
-        let (_, commands) = scene.into_parts();
+        let (_, commands) = frame.into_parts();
         // TODO(v0.8): add debug paint/invalidation instrumentation
-        for command in commands.into_commands() {
+        for command in commands {
             match command {
-                DrawCommand::Clear(command) => self.clear(command),
-                DrawCommand::Fill(command) => self.fill(command),
-                DrawCommand::Stroke(command) => self.stroke(command),
-                DrawCommand::Text(command) => self.text(command),
-                DrawCommand::Image(command) => self.image(command),
-                DrawCommand::Clip(command) => self.clip(command),
-                DrawCommand::Transform(command) => self.transform(command),
-                DrawCommand::State(command) => self.state(command),
+                RenderCommand::Clear(command) => self.clear(command),
+                RenderCommand::Fill(command) => self.fill(command),
+                RenderCommand::Stroke(command) => self.stroke(command),
+                RenderCommand::Text(command) => self.text(command),
+                RenderCommand::Image(command) => self.image(command),
+                RenderCommand::Clip(command) => self.clip(command),
+                RenderCommand::Transform(command) => self.transform(command),
+                RenderCommand::State(command) => self.state(command),
             }
         }
     }
@@ -48,6 +49,11 @@ impl<'a> Rasterizer<'a> {
             FillShape::Circle { center, radius } => {
                 self.fill_circle(center, radius, command.fill.paint.color)
             }
+            FillShape::Ellipse {
+                center,
+                radius_x,
+                radius_y,
+            } => self.fill_ellipse(center, radius_x, radius_y, command.fill.paint.color),
         }
     }
 
@@ -66,7 +72,7 @@ impl<'a> Rasterizer<'a> {
         self.draw_text(
             command.position,
             &command.text,
-            command.style.pixel_size(),
+            &command.style,
             command.paint.color,
         );
     }
@@ -98,6 +104,10 @@ impl<'a> Rasterizer<'a> {
 
     fn fill_rect(&mut self, rect: Rect, color: Color) {
         let rect = self.frame.transform().map_rect(rect);
+        self.fill_rect_mapped(rect, color);
+    }
+
+    fn fill_rect_mapped(&mut self, rect: Rect, color: Color) {
         self.for_each_pixel(rect, |_, _, pixel| *pixel = blend(*pixel, color));
     }
 
@@ -134,6 +144,29 @@ impl<'a> Rasterizer<'a> {
         });
     }
 
+    fn fill_ellipse(&mut self, center: Point, radius_x: f32, radius_y: f32, color: Color) {
+        let radius_x = radius_x.max(0.0);
+        let radius_y = radius_y.max(0.0);
+        if radius_x <= f32::EPSILON || radius_y <= f32::EPSILON {
+            return;
+        }
+
+        let center = self.frame.transform().map_point(center);
+        let bounds = Rect::xywh(
+            center.x - radius_x,
+            center.y - radius_y,
+            radius_x * 2.0,
+            radius_y * 2.0,
+        );
+        self.for_each_pixel(bounds, |x, y, pixel| {
+            let dx = (x as f32 + 0.5 - center.x) / radius_x;
+            let dy = (y as f32 + 0.5 - center.y) / radius_y;
+            if dx * dx + dy * dy <= 1.0 {
+                *pixel = blend(*pixel, color);
+            }
+        });
+    }
+
     fn draw_line(&mut self, start: Point, end: Point, width: f32, color: Color) {
         let transform = self.frame.transform();
         let start = transform.map_point(start);
@@ -153,20 +186,31 @@ impl<'a> Rasterizer<'a> {
         });
     }
 
-    fn draw_text(&mut self, position: Point, text: &str, size: f32, color: Color) {
-        // TODO(v0.2): replace bitmap font rendering with a real text layout/rasterization path.
-        let position = self.frame.transform().map_point(position);
-        let scale = (size / 8.0).round().max(1.0) as i32;
+    fn draw_text(&mut self, position: Point, text: &str, style: &crate::TextStyle, color: Color) {
+        let layout = TextLayout::new(position, text, style);
+        let resolved = layout.resolved();
+        let origin = layout.origin();
+        let mut cursor_y = origin.y.round() as i32;
+
+        for (line_index, line) in text.split('\n').enumerate() {
+            let cursor_x = layout.line_start_x(line_index, style.align_mode());
+            self.draw_text_line(cursor_x, cursor_y, line, resolved.scale, color);
+            cursor_y += resolved.line_height;
+        }
+    }
+
+    fn draw_text_line(
+        &mut self,
+        cursor_x: i32,
+        cursor_y: i32,
+        text: &str,
+        scale: i32,
+        color: Color,
+    ) {
+        let mut cursor_x = cursor_x;
         let glyph_advance = 8 * scale;
-        let origin_x = position.x.round() as i32;
-        let mut cursor_x = origin_x;
-        let mut cursor_y = position.y.round() as i32;
+
         for ch in text.chars() {
-            if ch == '\n' {
-                cursor_x = origin_x;
-                cursor_y += 8 * scale;
-                continue;
-            }
             if let Some(glyph) = BASIC_FONTS.get(ch) {
                 for (row, bits) in glyph.iter().copied().enumerate() {
                     for col in 0..8 {
@@ -184,7 +228,6 @@ impl<'a> Rasterizer<'a> {
     }
 
     fn draw_image_placeholder(&mut self, rect: Rect, color: Color) {
-        let rect = self.frame.transform().map_rect(rect);
         self.draw_line(
             Point::new(rect.x(), rect.y()),
             Point::new(rect.right(), rect.y()),

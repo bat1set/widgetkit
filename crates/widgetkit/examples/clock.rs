@@ -17,6 +17,7 @@ struct ClockWidget;
 struct ClockState {
     time_text: String,
     status: String,
+    accent: Color,
 }
 
 #[derive(Clone, Debug)]
@@ -33,17 +34,25 @@ impl Widget for ClockWidget {
         ClockState {
             time_text: current_time_string(),
             status: "starting runtime...".into(),
+            accent: Color::rgb(127, 160, 255),
         }
     }
 
     fn start(&mut self, _state: &mut Self::State, ctx: &mut StartCtx<Self>) {
-        ctx.scheduler().every(std::time::Duration::from_secs(1), Msg::Tick);
-        ctx.tasks()
-            .spawn_named("load-status", async { Msg::StatusLoaded("task backend ready".to_string()) });
+        ctx.scheduler()
+            .every(std::time::Duration::from_secs(1), Msg::Tick);
+        ctx.tasks().spawn_named("load-status", async {
+            Msg::StatusLoaded("software renderer + render frame ready".to_string())
+        });
         ctx.post(Msg::Tick);
     }
 
-    fn update(&mut self, state: &mut Self::State, event: Event<Self::Message>, ctx: &mut UpdateCtx<Self>) {
+    fn update(
+        &mut self,
+        state: &mut Self::State,
+        event: Event<Self::Message>,
+        ctx: &mut UpdateCtx<Self>,
+    ) {
         match event {
             Event::Message(Msg::Tick) => {
                 state.time_text = current_time_string();
@@ -58,36 +67,51 @@ impl Widget for ClockWidget {
     }
 
     fn render(&self, state: &Self::State, canvas: &mut Canvas, _ctx: &RenderCtx<Self>) {
-        canvas.clear(Color::rgb(14, 17, 22));
-        canvas.round_rect(
-            Rect::xywh(12.0, 12.0, 336.0, 112.0),
-            18.0,
-            Color::rgba(30, 36, 48, 255),
-        );
+        let bg = Color::rgb(14, 17, 22);
+        let card = Color::rgb(30, 36, 48);
+        let muted = Color::rgb(190, 198, 212);
+        let divider = Color::rgba(255, 255, 255, 32);
+
+        canvas.clear(bg);
+
+        canvas.save();
+        canvas.clip_rect(Rect::xywh(12.0, 12.0, 336.0, 112.0));
+        canvas.round_rect(Rect::xywh(12.0, 12.0, 336.0, 112.0), 18.0, card);
+
         canvas.text(
             Point::new(28.0, 28.0),
-            "WidgetKit v0.1",
+            "WidgetKit render frame",
             TextStyle::new().size(16.0),
-            Color::rgb(127, 160, 255),
+            state.accent,
         );
+
+        canvas.line(
+            Point::new(24.0, 45.0),
+            Point::new(324.0, 45.0),
+            Stroke::new(1.0),
+            divider,
+        );
+
         canvas.text(
             Point::new(28.0, 50.0),
             &state.time_text,
             TextStyle::new().size(24.0),
             Color::WHITE,
         );
+
+        canvas.circle(Point::new(312.0, 30.0), 6.0, state.accent);
+
         canvas.text(
-            Point::new(28.0, 88.0),
+            Point::new(28.0, 98.0),
             &state.status,
-            TextStyle::new().size(10.0),
-            Color::rgb(190, 198, 212),
+            TextStyle::new()
+                .size(10.0)
+                .line_height(12.0)
+                .baseline(TextBaseline::Bottom),
+            muted,
         );
-        canvas.line(
-            Point::new(24.0, 45.0),
-            Point::new(324.0, 45.0),
-            Stroke::new(1.0),
-            Color::rgba(255, 255, 255, 32),
-        );
+
+        canvas.restore();
     }
 
     fn stop(&mut self, _state: &mut Self::State, ctx: &mut StopCtx<Self>) {

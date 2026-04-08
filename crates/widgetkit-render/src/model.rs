@@ -2,33 +2,40 @@ use crate::{Stroke, TextStyle};
 use widgetkit_core::{Color, Point, Rect, Size};
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct RenderScene {
+pub struct RenderFrame {
     size: Size,
-    commands: CommandList,
+    commands: Vec<RenderCommand>,
 }
 
-impl RenderScene {
-    pub(crate) fn new(size: Size, commands: CommandList) -> Self {
+impl RenderFrame {
+    pub fn new(size: Size, commands: Vec<RenderCommand>) -> Self {
         Self { size, commands }
     }
 
-    pub(crate) fn size(&self) -> Size {
+    pub fn size(&self) -> Size {
         self.size
     }
 
-    #[cfg(test)]
-    pub(crate) fn commands(&self) -> &[DrawCommand] {
-        self.commands.commands()
+    pub fn commands(&self) -> &[RenderCommand] {
+        &self.commands
     }
 
-    pub(crate) fn into_parts(self) -> (Size, CommandList) {
+    pub fn into_commands(self) -> Vec<RenderCommand> {
+        self.commands
+    }
+
+    pub(crate) fn from_list(size: Size, commands: CommandList) -> Self {
+        Self::new(size, commands.into_commands())
+    }
+
+    pub(crate) fn into_parts(self) -> (Size, Vec<RenderCommand>) {
         (self.size, self.commands)
     }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct CommandList {
-    commands: Vec<DrawCommand>,
+    commands: Vec<RenderCommand>,
 }
 
 impl CommandList {
@@ -36,28 +43,17 @@ impl CommandList {
         Self::default()
     }
 
-    #[cfg(test)]
-    pub(crate) fn from_commands(commands: Vec<DrawCommand>) -> Self {
-        Self { commands }
-    }
-
-    pub(crate) fn push(&mut self, command: DrawCommand) {
+    pub(crate) fn push(&mut self, command: RenderCommand) {
         self.commands.push(command);
     }
 
-    #[cfg(test)]
-    pub(crate) fn commands(&self) -> &[DrawCommand] {
-        &self.commands
-    }
-
-    pub(crate) fn into_commands(self) -> Vec<DrawCommand> {
+    pub(crate) fn into_commands(self) -> Vec<RenderCommand> {
         self.commands
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum DrawCommand {
+pub enum RenderCommand {
     Clear(ClearCommand),
     Fill(FillCommand),
     Stroke(StrokeCommand),
@@ -69,28 +65,28 @@ pub(crate) enum DrawCommand {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct Paint {
-    pub(crate) color: Color,
+pub struct Paint {
+    pub color: Color,
 }
 
 impl Paint {
-    pub(crate) const fn solid(color: Color) -> Self {
+    pub const fn solid(color: Color) -> Self {
         Self { color }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct ClearCommand {
-    pub(crate) paint: Paint,
+pub struct ClearCommand {
+    pub paint: Paint,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct Fill {
-    pub(crate) paint: Paint,
+pub struct Fill {
+    pub paint: Paint,
 }
 
 impl Fill {
-    pub(crate) const fn solid(color: Color) -> Self {
+    pub const fn solid(color: Color) -> Self {
         Self {
             paint: Paint::solid(color),
         }
@@ -98,71 +94,79 @@ impl Fill {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct FillCommand {
-    pub(crate) shape: FillShape,
-    pub(crate) fill: Fill,
+pub struct FillCommand {
+    pub shape: FillShape,
+    pub fill: Fill,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum FillShape {
+pub enum FillShape {
     Rect(Rect),
-    RoundRect { rect: Rect, radius: f32 },
-    Circle { center: Point, radius: f32 },
+    RoundRect {
+        rect: Rect,
+        radius: f32,
+    },
+    Circle {
+        center: Point,
+        radius: f32,
+    },
+    Ellipse {
+        center: Point,
+        radius_x: f32,
+        radius_y: f32,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct StrokeCommand {
-    pub(crate) shape: StrokeShape,
-    pub(crate) stroke: Stroke,
-    pub(crate) paint: Paint,
+pub struct StrokeCommand {
+    pub shape: StrokeShape,
+    pub stroke: Stroke,
+    pub paint: Paint,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum StrokeShape {
+pub enum StrokeShape {
     Line { start: Point, end: Point },
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct TextCommand {
-    pub(crate) position: Point,
-    pub(crate) text: String,
-    pub(crate) style: TextStyle,
-    pub(crate) paint: Paint,
+pub struct TextCommand {
+    pub position: Point,
+    pub text: String,
+    pub style: TextStyle,
+    pub paint: Paint,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct ImageCommand {
-    pub(crate) rect: Rect,
-    pub(crate) source: ImageSource,
-    pub(crate) paint: Paint,
+pub struct ImageCommand {
+    pub rect: Rect,
+    pub source: ImageSource,
+    pub paint: Paint,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum ImageSource {
+pub enum ImageSource {
     Placeholder,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct ClipCommand {
-    pub(crate) primitive: ClipPrimitive,
+pub struct ClipCommand {
+    pub primitive: ClipPrimitive,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum ClipPrimitive {
+pub enum ClipPrimitive {
     Rect(Rect),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub(crate) struct Transform {
-    pub(crate) translate_x: f32,
-    pub(crate) translate_y: f32,
+pub struct Transform {
+    pub translate_x: f32,
+    pub translate_y: f32,
 }
 
 impl Transform {
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(crate) const fn translation(x: f32, y: f32) -> Self {
+    pub const fn translation(x: f32, y: f32) -> Self {
         Self {
             translate_x: x,
             translate_y: y,
@@ -190,15 +194,13 @@ impl Transform {
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct TransformCommand {
-    pub(crate) transform: Transform,
+pub struct TransformCommand {
+    pub transform: Transform,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum StateCommand {
+pub enum StateCommand {
     Save,
     Restore,
 }

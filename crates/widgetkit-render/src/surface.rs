@@ -1,4 +1,4 @@
-use crate::{Canvas, frame::Frame, raster::Rasterizer};
+use crate::{Canvas, RenderFrame, frame::Frame, raster::Rasterizer};
 use widgetkit_core::{Color, Error, Result};
 
 pub trait RenderSurface {
@@ -7,7 +7,11 @@ pub trait RenderSurface {
 }
 
 pub trait Renderer: Send {
-    fn render_canvas(&mut self, canvas: Canvas, surface: &mut dyn RenderSurface) -> Result<()>;
+    fn render_frame(&mut self, frame: RenderFrame, surface: &mut dyn RenderSurface) -> Result<()>;
+
+    fn render_canvas(&mut self, canvas: Canvas, surface: &mut dyn RenderSurface) -> Result<()> {
+        self.render_frame(canvas.into_frame(), surface)
+    }
 }
 
 pub struct SoftwareRenderer {
@@ -38,13 +42,16 @@ impl Default for SoftwareRenderer {
 }
 
 impl Renderer for SoftwareRenderer {
-    fn render_canvas(&mut self, canvas: Canvas, surface: &mut dyn RenderSurface) -> Result<()> {
+    fn render_frame(
+        &mut self,
+        render_frame: RenderFrame,
+        surface: &mut dyn RenderSurface,
+    ) -> Result<()> {
         let (width, height) = surface.size();
         self.ensure_buffer(width, height)?;
-        let scene = canvas.into_scene();
-        let frame = Frame::new(width, height, &mut self.pixels);
-        let mut raster = Rasterizer::new(frame);
-        raster.execute(scene);
+        let surface_frame = Frame::new(width, height, &mut self.pixels);
+        let mut raster = Rasterizer::new(surface_frame);
+        raster.execute(render_frame);
         drop(raster);
         surface.present(&self.pixels)
     }

@@ -237,7 +237,7 @@ where
             let mut canvas = Canvas::new(self.surface_size);
             let ctx = RenderCtx::new(self.widget_id, self.instance_id, self.surface_size);
             self.widget.render(state, &mut canvas, &ctx);
-            self.renderer.render_canvas(canvas, surface)?;
+            self.renderer.render_frame(canvas.into_frame(), surface)?;
             self.services.render_requested = false;
         }
         Ok(())

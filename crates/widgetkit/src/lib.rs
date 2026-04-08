@@ -5,34 +5,41 @@
 
 #[cfg(feature = "canvas")]
 pub use widgetkit_core as core;
+#[cfg(feature = "windows")]
+pub use widgetkit_host_windows as windows;
 #[cfg(feature = "canvas")]
 pub use widgetkit_render as render;
 #[cfg(feature = "canvas")]
 pub use widgetkit_runtime as runtime;
-#[cfg(feature = "windows")]
-pub use widgetkit_host_windows as windows;
 
 #[cfg(feature = "canvas")]
-pub use widgetkit_core::{Color, Duration, HostEvent, Insets, InstanceId, Point, Rect, Result, Size, TaskId, TimerId, WidgetId};
+pub use widgetkit_core::{
+    Color, Duration, HostEvent, Insets, InstanceId, Point, Rect, Result, Size, TaskId, TimerId,
+    WidgetId,
+};
+#[cfg(feature = "windows")]
+pub use widgetkit_host_windows::WindowsHost;
 #[cfg(feature = "canvas")]
-pub use widgetkit_render::{Canvas, SoftwareRenderer, Stroke, TextStyle};
+pub use widgetkit_render::{
+    Canvas, RawCanvas, RenderCommand, RenderFrame, SoftwareRenderer, Stroke, TextAlign,
+    TextBaseline, TextMetrics, TextStyle,
+};
 #[cfg(feature = "canvas")]
 pub use widgetkit_runtime::{
     AppRunner, DisposeCtx, Event, HostRunner, MountCtx, RenderCtx, Scheduler, StartCtx, StopCtx,
     Tasks, UpdateCtx, Widget, WidgetApp,
 };
-#[cfg(feature = "windows")]
-pub use widgetkit_host_windows::WindowsHost;
 
 #[cfg(feature = "canvas")]
 pub mod prelude {
-    pub use crate::{
-        Canvas, Color, DisposeCtx, Duration, Event, HostEvent, Insets, InstanceId, MountCtx,
-        Point, Rect, RenderCtx, Result, Scheduler, Size, SoftwareRenderer, StartCtx, StopCtx,
-        Stroke, TaskId, Tasks, TextStyle, TimerId, UpdateCtx, Widget, WidgetApp, WidgetId,
-    };
     #[cfg(feature = "windows")]
     pub use crate::WindowsHost;
+    pub use crate::{
+        Canvas, Color, DisposeCtx, Duration, Event, HostEvent, Insets, InstanceId, MountCtx, Point,
+        RawCanvas, Rect, RenderCommand, RenderCtx, RenderFrame, Result, Scheduler, Size,
+        SoftwareRenderer, StartCtx, StopCtx, Stroke, TaskId, Tasks, TextAlign, TextBaseline,
+        TextMetrics, TextStyle, TimerId, UpdateCtx, Widget, WidgetApp, WidgetId,
+    };
 }
 
 // TODO(v0.5): add declarative feature exports
