@@ -80,7 +80,7 @@ impl Widget for ClockWidget {
 
         canvas.text(
             Point::new(28.0, 28.0),
-            "WidgetKit render frame",
+            "WidgetKit",
             TextStyle::new().size(16.0),
             state.accent,
         );
