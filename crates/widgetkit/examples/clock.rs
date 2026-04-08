@@ -6,7 +6,7 @@ use widgetkit::prelude::*;
 fn main() -> widgetkit::Result<()> {
     WidgetApp::new()
         .widget("clock", ClockWidget)
-        .host(WindowsHost::new().with_size(Size::new(360.0, 135.0)))
+        .host(WindowsHost::new().with_size(Size::new(360.0, 135.0)).with_standard_top_bar(false))
         .renderer(SoftwareRenderer::new())
         .run()
 }

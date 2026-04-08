@@ -10,12 +10,14 @@ use winit::window::{Window, WindowAttributes, WindowId};
 
 pub struct WindowsHost {
     size: Size,
+    standard_top_bar: bool,
 }
 
 impl WindowsHost {
     pub fn new() -> Self {
         Self {
             size: Size::new(320.0, 120.0),
+            standard_top_bar: true,
         }
     }
 
@@ -23,6 +25,11 @@ impl WindowsHost {
         if !size.is_empty() {
             self.size = size;
         }
+        self
+    }
+
+    pub fn with_standard_top_bar(mut self, visible: bool) -> Self {
+        self.standard_top_bar = visible;
         self
     }
 }
@@ -117,7 +124,11 @@ where
     fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<Rc<Window>> {
         let attributes: WindowAttributes = Window::default_attributes()
             .with_title(self.runner.widget_name())
-            .with_inner_size(LogicalSize::new(self.host.size.width as f64, self.host.size.height as f64));
+            .with_inner_size(LogicalSize::new(
+                self.host.size.width as f64,
+                self.host.size.height as f64,
+            ))
+            .with_decorations(self.host.standard_top_bar);
         let window = event_loop
             .create_window(attributes)
             .map_err(|error| Error::platform(error.to_string()))?;
@@ -148,7 +159,10 @@ where
         };
 
         let size = window.inner_size();
-        if let Err(error) = self.runner.initialize(Size::new(size.width.max(1) as f32, size.height.max(1) as f32)) {
+        if let Err(error) = self.runner.initialize(Size::new(
+            size.width.max(1) as f32,
+            size.height.max(1) as f32,
+        )) {
             self.fail(event_loop, error);
             return;
         }
@@ -162,7 +176,12 @@ where
         self.process_runtime(event_loop);
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: WindowId,
+        event: WindowEvent,
+    ) {
         let Some(window) = self.window.as_ref() else {
             return;
         };
@@ -226,3 +245,19 @@ where
 // TODO(v0.3): monitor/work-area abstraction
 // TODO(v0.4): input events routing
 // TODO(v0.7): hybrid host compatibility
+
+#[cfg(test)]
+mod tests {
+    use super::WindowsHost;
+    use widgetkit_core::Size;
+
+    #[test]
+    fn windows_host_can_disable_standard_top_bar() {
+        let host = WindowsHost::new()
+            .with_size(Size::new(400.0, 240.0))
+            .with_standard_top_bar(false);
+
+        assert_eq!(host.size, Size::new(400.0, 240.0));
+        assert!(!host.standard_top_bar);
+    }
+}
