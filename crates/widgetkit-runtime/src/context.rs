@@ -46,7 +46,11 @@ impl<W> StartCtx<W>
 where
     W: Widget,
 {
-    pub(crate) fn new(widget_id: WidgetId, instance_id: InstanceId, services: NonNull<RuntimeServices<W::Message>>) -> Self {
+    pub(crate) fn new(
+        widget_id: WidgetId,
+        instance_id: InstanceId,
+        services: NonNull<RuntimeServices<W::Message>>,
+    ) -> Self {
         Self {
             widget_id,
             instance_id,
@@ -70,8 +74,9 @@ where
 
     pub fn request_render(&mut self) {
         let services = self.services_mut();
-        services.render_requested = true;
-        services.dispatcher.wake.wake();
+        if services.request_render() {
+            services.dispatcher.wake.wake();
+        }
     }
 
     /// Returns the scheduler owned by the current widget instance.
@@ -107,7 +112,11 @@ impl<W> UpdateCtx<W>
 where
     W: Widget,
 {
-    pub(crate) fn new(widget_id: WidgetId, instance_id: InstanceId, services: NonNull<RuntimeServices<W::Message>>) -> Self {
+    pub(crate) fn new(
+        widget_id: WidgetId,
+        instance_id: InstanceId,
+        services: NonNull<RuntimeServices<W::Message>>,
+    ) -> Self {
         Self {
             widget_id,
             instance_id,
@@ -131,8 +140,9 @@ where
 
     pub fn request_render(&mut self) {
         let services = self.services_mut();
-        services.render_requested = true;
-        services.dispatcher.wake.wake();
+        if services.request_render() {
+            services.dispatcher.wake.wake();
+        }
     }
 
     /// Returns the scheduler owned by the current widget instance.
@@ -204,7 +214,11 @@ impl<W> StopCtx<W>
 where
     W: Widget,
 {
-    pub(crate) fn new(widget_id: WidgetId, instance_id: InstanceId, services: NonNull<RuntimeServices<W::Message>>) -> Self {
+    pub(crate) fn new(
+        widget_id: WidgetId,
+        instance_id: InstanceId,
+        services: NonNull<RuntimeServices<W::Message>>,
+    ) -> Self {
         Self {
             widget_id,
             instance_id,

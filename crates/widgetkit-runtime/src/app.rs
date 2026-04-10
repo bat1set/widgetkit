@@ -5,7 +5,7 @@ use crate::{
     internal::{DispatchToken, Dispatcher, RuntimeEvent, RuntimeServices, WakeHandle},
     widget::Widget,
 };
-use crossbeam_channel::{Receiver, TryRecvError, unbounded};
+use crossbeam_channel::{unbounded, Receiver, TryRecvError};
 use widgetkit_core::{Error, HostEvent, InstanceId, Result, Size, WidgetId};
 use widgetkit_render::{Canvas, RenderSurface, Renderer};
 
@@ -227,10 +227,18 @@ where
     }
 
     pub fn needs_redraw(&self) -> bool {
-        self.services.render_requested
+        self.services.needs_redraw()
+    }
+
+    pub fn take_redraw_request(&mut self) -> bool {
+        self.initialized && !self.shut_down && self.services.take_redraw_request()
     }
 
     pub fn render(&mut self, surface: &mut dyn RenderSurface) -> Result<()> {
+        if !self.initialized || self.shut_down || !self.services.begin_render() {
+            return Ok(());
+        }
+
         let (width, height) = surface.size();
         self.surface_size = Size::new(width as f32, height as f32);
         if let Some(state) = self.state.as_ref() {
@@ -238,7 +246,9 @@ where
             let ctx = RenderCtx::new(self.widget_id, self.instance_id, self.surface_size);
             self.widget.render(state, &mut canvas, &ctx);
             self.renderer.render_frame(canvas.into_frame(), surface)?;
-            self.services.render_requested = false;
+            self.services.finish_render();
+        } else {
+            self.services.clear_redraw();
         }
         Ok(())
     }
@@ -260,12 +270,14 @@ where
         self.instance_generation += 1;
         self.initialized = false;
         self.shut_down = true;
+        self.services.clear_redraw();
         Ok(())
     }
 
     fn request_render(&mut self) {
-        self.services.render_requested = true;
-        self.services.dispatcher.wake.wake();
+        if self.services.request_render() {
+            self.services.dispatcher.wake.wake();
+        }
     }
 
     fn dispatch_event(&mut self, event: Event<W::Message>) {
@@ -304,11 +316,9 @@ where
 
     #[cfg(test)]
     pub(crate) fn dispatch_test_message(&self, token: DispatchToken, message: W::Message) {
-        let _ = self
-            .services
-            .dispatcher
-            .sender
-            .send(RuntimeEvent::Message(crate::internal::MessageEnvelope { token, message }));
+        let _ = self.services.dispatcher.sender.send(RuntimeEvent::Message(
+            crate::internal::MessageEnvelope { token, message },
+        ));
     }
 
     fn with_state_mut(
@@ -316,7 +326,13 @@ where
         f: impl FnOnce(&mut W, &mut W::State, &mut RuntimeServices<W::Message>, WidgetId, InstanceId),
     ) {
         if let Some(state) = self.state.as_mut() {
-            f(&mut self.widget, state, &mut self.services, self.widget_id, self.instance_id);
+            f(
+                &mut self.widget,
+                state,
+                &mut self.services,
+                self.widget_id,
+                self.instance_id,
+            );
         }
     }
 }

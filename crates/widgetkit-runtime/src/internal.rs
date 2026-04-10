@@ -1,4 +1,7 @@
-use crate::{scheduler::SchedulerState, tasks::{TaskBackend, task_backend}};
+use crate::{
+    scheduler::SchedulerState,
+    tasks::{task_backend, TaskBackend},
+};
 use crossbeam_channel::Sender;
 use std::sync::{Arc, Mutex};
 use widgetkit_core::{InstanceId, TaskId, TimerId};
@@ -28,7 +31,7 @@ pub(crate) struct RuntimeServices<M> {
     pub(crate) dispatcher: Dispatcher<M>,
     pub(crate) scheduler: SchedulerState<M>,
     pub(crate) tasks: Box<dyn TaskBackend<M>>,
-    pub(crate) render_requested: bool,
+    redraw: RedrawState,
 }
 
 impl<M> RuntimeServices<M>
@@ -40,15 +43,45 @@ where
             dispatcher: dispatcher.clone(),
             scheduler: SchedulerState::new(dispatcher.clone()),
             tasks: task_backend(dispatcher),
-            render_requested: true,
+            redraw: RedrawState::default(),
         }
+    }
+
+    pub(crate) fn request_render(&mut self) -> bool {
+        self.redraw.request()
+    }
+
+    pub(crate) fn needs_redraw(&self) -> bool {
+        self.redraw.is_dirty()
+    }
+
+    pub(crate) fn take_redraw_request(&mut self) -> bool {
+        self.redraw.take_request()
+    }
+
+    pub(crate) fn begin_render(&mut self) -> bool {
+        self.redraw.begin_render()
+    }
+
+    pub(crate) fn finish_render(&mut self) {
+        self.redraw.finish_render();
+    }
+
+    pub(crate) fn clear_redraw(&mut self) {
+        self.redraw.clear();
     }
 }
 
 pub(crate) enum RuntimeEvent<M> {
     Message(MessageEnvelope<M>),
-    TaskFinished { token: DispatchToken, task_id: TaskId },
-    TimerFinished { token: DispatchToken, timer_id: TimerId },
+    TaskFinished {
+        token: DispatchToken,
+        task_id: TaskId,
+    },
+    TimerFinished {
+        token: DispatchToken,
+        timer_id: TimerId,
+    },
 }
 
 #[derive(Clone, Default)]
@@ -65,10 +98,64 @@ impl WakeHandle {
     }
 
     pub(crate) fn wake(&self) {
-        let callback = self.callback.lock().expect("wake callback mutex poisoned").clone();
+        let callback = self
+            .callback
+            .lock()
+            .expect("wake callback mutex poisoned")
+            .clone();
         if let Some(callback) = callback {
             callback();
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct RedrawState {
+    dirty: bool,
+    scheduled: bool,
+}
+
+impl RedrawState {
+    fn request(&mut self) -> bool {
+        if self.dirty {
+            return false;
+        }
+
+        self.dirty = true;
+        true
+    }
+
+    fn is_dirty(self) -> bool {
+        self.dirty
+    }
+
+    fn take_request(&mut self) -> bool {
+        if !self.dirty || self.scheduled {
+            return false;
+        }
+
+        self.scheduled = true;
+        true
+    }
+
+    fn begin_render(&mut self) -> bool {
+        if !self.dirty {
+            self.scheduled = false;
+            return false;
+        }
+
+        self.scheduled = false;
+        true
+    }
+
+    fn finish_render(&mut self) {
+        self.dirty = false;
+        self.scheduled = false;
+    }
+
+    fn clear(&mut self) {
+        self.dirty = false;
+        self.scheduled = false;
     }
 }
 

@@ -4,6 +4,7 @@ use crate::{
 };
 use futures::future;
 use std::{
+    sync::atomic::{AtomicUsize, Ordering},
     sync::{Arc, Mutex},
     thread,
     time::Duration as StdDuration,
@@ -263,4 +264,89 @@ fn stale_generation_token_does_not_match_current_runtime() {
     let token = DispatchToken::new(widgetkit_core::InstanceId::new(), 1);
     let next_generation = DispatchToken::new(token.instance_id, 2);
     assert_ne!(token, next_generation);
+}
+
+struct CoalescedRedrawWidget;
+
+enum CoalescedRedrawMsg {}
+
+impl Widget for CoalescedRedrawWidget {
+    type State = ();
+    type Message = CoalescedRedrawMsg;
+
+    fn mount(&mut self, _ctx: &mut MountCtx<Self>) -> Self::State {}
+
+    fn start(&mut self, _state: &mut Self::State, ctx: &mut StartCtx<Self>) {
+        ctx.request_render();
+        ctx.request_render();
+        ctx.request_render();
+    }
+}
+
+#[test]
+fn repeated_render_requests_collapse_until_the_pending_frame_is_rendered() {
+    let wakes = Arc::new(AtomicUsize::new(0));
+    let mut runner = AppRunner::new("coalesced-redraw", CoalescedRedrawWidget, SoftwareRenderer::new());
+    let wake_count = Arc::clone(&wakes);
+    runner.attach_waker(move || {
+        wake_count.fetch_add(1, Ordering::SeqCst);
+    });
+
+    runner.initialize(Size::new(32.0, 32.0)).unwrap();
+
+    assert_eq!(wakes.load(Ordering::SeqCst), 1);
+    assert!(runner.needs_redraw());
+    assert!(runner.take_redraw_request());
+    assert!(!runner.take_redraw_request());
+
+    let mut surface = MemorySurface::new(32, 32);
+    runner.render(&mut surface).unwrap();
+
+    assert!(!runner.needs_redraw());
+    assert!(!runner.take_redraw_request());
+}
+
+struct LateRenderWidget {
+    renders: Arc<Mutex<u32>>,
+}
+
+enum LateRenderMsg {}
+
+impl Widget for LateRenderWidget {
+    type State = ();
+    type Message = LateRenderMsg;
+
+    fn mount(&mut self, _ctx: &mut MountCtx<Self>) -> Self::State {}
+
+    fn start(&mut self, _state: &mut Self::State, ctx: &mut StartCtx<Self>) {
+        ctx.request_render();
+    }
+
+    fn render(&self, _state: &Self::State, canvas: &mut Canvas, _ctx: &RenderCtx<Self>) {
+        *self.renders.lock().unwrap() += 1;
+        canvas.clear(Color::BLACK);
+    }
+}
+
+#[test]
+fn shutdown_clears_pending_redraw_and_skips_late_render_calls() {
+    let renders = Arc::new(Mutex::new(0));
+    let widget = LateRenderWidget {
+        renders: Arc::clone(&renders),
+    };
+    let mut runner = AppRunner::new("late-render", widget, SoftwareRenderer::new());
+    runner.initialize(Size::new(32.0, 32.0)).unwrap();
+
+    assert!(runner.needs_redraw());
+    assert!(runner.take_redraw_request());
+
+    runner.shutdown().unwrap();
+
+    assert!(!runner.needs_redraw());
+    assert!(!runner.take_redraw_request());
+
+    let mut surface = MemorySurface::new(32, 32);
+    runner.render(&mut surface).unwrap();
+
+    assert_eq!(*renders.lock().unwrap(), 0);
 }

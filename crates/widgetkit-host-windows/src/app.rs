@@ -105,8 +105,8 @@ where
         event_loop.exit();
     }
 
-    fn request_redraw_if_needed(&self) {
-        if self.runner.needs_redraw() {
+    fn request_redraw_if_needed(&mut self) {
+        if self.runner.take_redraw_request() {
             if let Some(window) = self.window.as_ref() {
                 window.request_redraw();
             }
@@ -167,9 +167,9 @@ where
             return;
         }
 
-        self.window = Some(window.clone());
+        self.window = Some(window);
         self.surface = Some(surface);
-        window.request_redraw();
+        self.request_redraw_if_needed();
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, _event: HostUserEvent) {
