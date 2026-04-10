@@ -297,7 +297,9 @@ fn dispatch_due<M>(
             }
             TimerDelivery::Repeat(factory) => {
                 let _ = dispatcher.post_message(factory());
-                let interval = entry.interval.expect("repeat timers must carry an interval");
+                let interval = entry
+                    .interval
+                    .expect("repeat timers must carry an interval");
                 entry.deadline = advance_deadline(entry.deadline, interval, now);
                 deadlines.push(DeadlineKey {
                     deadline: entry.deadline,
@@ -318,7 +320,10 @@ fn next_timeout<M>(
         .map(|next| next.deadline.saturating_duration_since(Instant::now()))
 }
 
-fn prune_stale<M>(entries: &HashMap<TimerId, TimerEntry<M>>, deadlines: &mut BinaryHeap<DeadlineKey>) {
+fn prune_stale<M>(
+    entries: &HashMap<TimerId, TimerEntry<M>>,
+    deadlines: &mut BinaryHeap<DeadlineKey>,
+) {
     while let Some(next) = deadlines.peek() {
         let Some(entry) = entries.get(&next.timer_id) else {
             let _ = deadlines.pop();

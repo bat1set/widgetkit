@@ -1,4 +1,7 @@
-use crate::{context::{DisposeCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx}, event::Event};
+use crate::{
+    context::{DisposeCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx},
+    event::Event,
+};
 use widgetkit_render::Canvas;
 
 pub trait Widget: Send + Sized + 'static {
@@ -9,7 +12,12 @@ pub trait Widget: Send + Sized + 'static {
 
     fn start(&mut self, _state: &mut Self::State, _ctx: &mut StartCtx<Self>) {}
 
-    fn update(&mut self, _state: &mut Self::State, _event: Event<Self::Message>, _ctx: &mut UpdateCtx<Self>) {}
+    fn update(
+        &mut self,
+        _state: &mut Self::State,
+        _event: Event<Self::Message>,
+        _ctx: &mut UpdateCtx<Self>,
+    ) {}
 
     fn render(&self, _state: &Self::State, _canvas: &mut Canvas, _ctx: &RenderCtx<Self>) {}
 

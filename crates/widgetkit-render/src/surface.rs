@@ -56,3 +56,6 @@ impl Renderer for SoftwareRenderer {
         surface.present(&self.pixels)
     }
 }
+
+// TODO(v0.3): allow alternate renderer implementations
+// TODO(v0.7): evaluate compatibility path for web/tauri-backed rendering

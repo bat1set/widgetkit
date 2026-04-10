@@ -13,6 +13,6 @@ categories = ["gui", "os::windows-apis"]
 [dependencies]
 softbuffer.workspace = true
 winit.workspace = true
-widgetkit-core = { version = "0.1.0", path = "../widgetkit-core" }
-widgetkit-render = { version = "0.1.0", path = "../widgetkit-render" }
-widgetkit-runtime = { version = "0.1.0", path = "../widgetkit-runtime" }
+widgetkit-core = { version = "0.2.0", path = "../widgetkit-core" }
+widgetkit-render = { version = "0.2.0", path = "../widgetkit-render" }
+widgetkit-runtime = { version = "0.2.0", path = "../widgetkit-runtime" }

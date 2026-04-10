@@ -5,142 +5,32 @@
 language: [English](README.md), Russian
 
 ---
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)](#)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)](#)
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)](#)
 [![Renderer](https://img.shields.io/badge/renderer-software%202D-lightgrey)](#)
-[![Status](https://img.shields.io/badge/status-bootstrap-orange)](#)
+[![Status](https://img.shields.io/badge/status-render%20v0.2-green)](#)
 
-WidgetKit - модульная библиотека для создания desktop-виджетов на rust.
+WidgetKit - модульная Rust-библиотека для создания desktop-виджетов.
 
-Текущая реализация уже включает рабочий Windows host, software 2D renderer, стабильный публичный путь `Widget + Canvas + WindowsHost + WidgetApp` и небольшую runtime-модель, рассчитанную на один экземпляр виджета.
+Сейчас проект сфокусирован на простом, но уже оформленном нативном пути:
 
-Проект будет развиваться в сторону более широкого desktop widget framework: с улучшенным scheduler, стабилизированным raw rendering API, layout-примитивами, declarative UI, desktop capabilities и Tauri или гибридной интеграции. Часть этого уже есть в раннем виде, часть пока не реализована, а часть остаётся внутренней или нестабильной в текущей версии.
+- `Widget + Canvas + WindowsHost + WidgetApp`
+- software 2D rendering на Windows
+- demand-driven redraw
+- более явный render pipeline под публичным `Canvas` API
 
-## Текущий статус проекта
+Если нужен подробный список того, что было добавлено и изменено в `v0.2`, смотри [CHANGELOG.md](CHANGELOG.md).
 
-### Уже реализовано
+## Как это ощущается сейчас
 
-- [x] workspace 
-- [x] Windows host
-- [x] software 2D renderer
-- [x] стабильный `Canvas`
-- [x] lifecycle виджета: `mount`, `start`, `update`, `render`, `stop`, `dispose`
-- [x] instance-scoped scheduler API
-- [x] instance-scoped task API
-- [x] optional Tokio-backed task runtime
-- [x] локальный пример `clock`
-- [x] demand-driven redraw
+WidgetKit всё ещё намеренно небольшой, но форма у него уже рабочая:
 
-### Уже существует, но пока не стабильно
+- `Canvas` - основной публичный drawing API
+- рисование проходит через `RenderFrame` и `RenderCommand`
+- runtime управляет lifecycle виджета, scheduler, tasks и redraw invalidation
+- Windows host умеет запускать decorated и frameless окна
 
-- [x] raw rendering foundation
-- [x] scene/command модель
-- [x] frame и surface abstractions
-
-Эти части уже есть в кодовой базе, но пока не входят в стабильный верхнеуровневый публичный API v0.1.
-
-### Пока не реализовано
-
-- [ ] transparent host window mode
-- [ ] frameless или overlay-style host window mode
-- [ ] placement и интеграция с рабочей областью desktop
-- [ ] orchestration для нескольких виджетов
-- [ ] стабильный публичный raw rendering API
-- [ ] declarative UI layer
-- [ ] advanced pointer input
-- [ ] keyboard input model
-- [ ] GPU renderer backends
-- [ ] Tauri integration
-- [ ] hybrid native/web widget composition
-
-## Направление итоговой реализации
-
-Долгосрочное направление проекта включает следующие возможности.
-
-### Планируемая публичная архитектура
-
-- [x] `Widget`
-- [x] `Canvas`
-- [x] `WindowsHost`
-- [x] `WidgetApp`
-- [ ] стабильный публичный raw rendering API
-- [ ] layout primitives
-- [ ] declarative UI layer
-- [ ] desktop capability modules
-- [ ] Tauri bridge
-- [ ] hybrid host model
-
-### Планируемое развитие runtime
-
-- [x] lifecycle-driven widget runtime
-- [x] scheduler abstraction
-- [x] task abstraction
-- [x] optional Tokio adapter
-- [ ] внутренняя реализация scheduler
-- [ ] stale-instance protection
-- [ ] input model
-- [ ] multi-widget runtime model
-
-### Планируемое развитие рендера
-
-- [x] стабильный `Canvas`
-- [x] software renderer
-- [x] внутренний raw rendering layer
-- [ ] стабильный raw rendering API
-- [ ] text pipeline
-- [ ] image pipeline шире placeholder-команд
-- [ ] GPU rendering backend
-
-## Структура workspace
-
-```text
-widgetkit/
-  crates/
-    widgetkit
-    widgetkit-core
-    widgetkit-runtime
-    widgetkit-render
-    widgetkit-host-windows
-```
-
-### `widgetkit`
-Верхний facade crate. Реэкспортирует стабильный публичный API и feature-gated entry points.
-
-### `widgetkit-core`
-Общие примитивы и контракты:
-- ошибки и result types
-- геометрия
-- цвета
-- идентификаторы
-- host events
-
-### `widgetkit-runtime`
-Runtime orchestration:
-- lifecycle виджета
-- `WidgetApp`
-- scheduler
-- task abstraction
-- event routing
-
-### `widgetkit-render`
-Стек рендера:
-- стабильный `Canvas`
-- style types
-- software renderer
-- внутренний raw rendering foundation
-
-### `widgetkit-host-windows`
-Windows-specific host implementation на базе `winit` и `softbuffer`.
-
-## Модель публичного API
-
-Текущий стабильный публичный путь:
-
-```
-Widget + Canvas + WindowsHost + WidgetApp
-```
-
-Типовой запуск:
+## Быстрый старт
 
 ```rust
 use widgetkit::prelude::*;
@@ -148,41 +38,72 @@ use widgetkit::prelude::*;
 fn main() -> widgetkit::Result<()> {
     WidgetApp::new()
         .widget("clock", ClockWidget)
-        .host(WindowsHost::new())
+        .host(
+            WindowsHost::new()
+                .with_size(Size::new(360.0, 135.0))
+                .with_standard_top_bar(true),
+        )
         .renderer(SoftwareRenderer::new())
         .run()
 }
 ```
 
-## Lifecycle
-
-Виджет реализует следующие методы lifecycle:
-
-- `mount`
-- `start`
-- `update`
-- `render`
-- `stop`
-- `dispose`
-
-Текущая runtime-модель работает с одним экземпляром виджета. Более широкая orchestration-модель пока не реализована.
-
-## Event Model
-
-Публичная модель событий намеренно небольшая:
+## Пример виджета
 
 ```rust
-Event::Message(M)
-Event::Host(HostEvent)
+use widgetkit::prelude::*;
+
+struct MyWidget;
+
+impl Widget for MyWidget {
+    type State = ();
+    type Message = ();
+
+    fn mount(&mut self, _ctx: &mut MountCtx<Self>) -> Self::State {}
+
+    fn render(&self, _state: &Self::State, canvas: &mut Canvas, _ctx: &RenderCtx<Self>) {
+        canvas.clear(Color::rgb(14, 17, 22));
+        canvas.save();
+        canvas.clip_rect(Rect::xywh(12.0, 12.0, 220.0, 72.0));
+        canvas.round_rect(
+            Rect::xywh(12.0, 12.0, 220.0, 72.0),
+            16.0,
+            Color::rgb(30, 36, 48),
+        );
+        canvas.text(
+            Point::new(24.0, 28.0),
+            "Hello",
+            TextStyle::new().size(16.0),
+            Color::rgb(127, 160, 255),
+        );
+        canvas.circle(Point::new(206.0, 28.0), 6.0, Color::rgb(127, 160, 255));
+        canvas.restore();
+    }
+}
 ```
 
-Срабатывания scheduler и завершения задач маршрутизируются внутри runtime и попадают в виджет как обычные `Message(M)`.
+## Примеры
 
-## Rendering Model
+В workspace есть:
 
-Рендер demand-driven. Постоянного непрерывного render loop в текущей версии нет.
+- `clock`
+- `pulse`
 
-`Canvas` — стабильная поверхность рисования для виджетов. Внутренние raw rendering primitives уже существуют, но в этой версии остаются crate-private и нестабильными. Стабильный публичный raw rendering API планируется позже.
+Запуск:
+
+```bash
+cargo run --example clock --features "windows canvas"
+```
+
+```bash
+cargo run --example pulse --features "windows canvas"
+```
+
+С optional Tokio-backed task runtime:
+
+```bash
+cargo run --example clock --features "windows canvas runtime-tokio"
+```
 
 ## Features
 
@@ -196,124 +117,37 @@ Event::Host(HostEvent)
 
 ```toml
 [dependencies]
-widgetkit = { version = "0.1.0", default-features = false, features = ["windows", "canvas"] }
+widgetkit = { version = "0.2.0", default-features = false, features = ["windows", "canvas"] }
 ```
 
-Чтобы включить optional Tokio-backed task runtime:
+## Структура workspace
 
-```toml
-[dependencies]
-widgetkit = { version = "0.1.0", default-features = false, features = ["windows", "canvas", "runtime-tokio"] }
+```text
+widgetkit/
+  crates/
+    widgetkit
+    widgetkit-core
+    widgetkit-runtime
+    widgetkit-render
+    widgetkit-host-windows
 ```
 
-## Пример
+- `widgetkit`: верхний facade crate
+- `widgetkit-core`: геометрия, цвета, ids, ошибки, host events
+- `widgetkit-runtime`: lifecycle, scheduler, tasks, redraw coordination
+- `widgetkit-render`: `Canvas`, render commands, text styles, software renderer
+- `widgetkit-host-windows`: Windows host на базе `winit` и `softbuffer`
 
-В workspace есть локальный пример `clock`.
+## Направление
 
-Запуск:
+Дальше планируются:
 
-```bash
-cargo run --example clock --features "windows canvas"
-```
-
-Или с optional Tokio backend:
-
-```bash
-cargo run --example clock --features "windows canvas runtime-tokio"
-```
-
-## Как написать свой виджет
-
-Виджет задаёт тип состояния и тип сообщений, затем реализует `Widget`.
-
-```rust
-use widgetkit::prelude::*;
-
-struct MyWidget;
-
-struct MyState {
-    text: String,
-}
-
-#[derive(Clone, Debug)]
-enum Msg {
-    Tick,
-}
-
-impl Widget for MyWidget {
-    type State = MyState;
-    type Message = Msg;
-
-    fn mount(&mut self, _ctx: &mut MountCtx<Self>) -> Self::State {
-        MyState {
-            text: "Initial".to_string(),
-        }
-    }
-
-    fn start(&mut self, _state: &mut Self::State, ctx: &mut StartCtx<Self>) {
-        ctx.scheduler().every(Duration::from_secs(1), Msg::Tick);
-    }
-
-    fn update(
-        &mut self,
-        state: &mut Self::State,
-        event: Event<Self::Message>,
-        ctx: &mut UpdateCtx<Self>,
-    ) {
-        match event {
-            Event::Message(Msg::Tick) => {
-                state.text = "Updated".to_string();
-                ctx.request_render();
-            }
-            Event::Host(_) => {}
-        }
-    }
-
-    fn render(&self, state: &Self::State, canvas: &mut Canvas, _ctx: &RenderCtx<Self>) {
-        canvas.clear(Color::BLACK);
-        canvas.text(
-            Point::new(16.0, 16.0),
-            &state.text,
-            TextStyle::new().size(16.0),
-            Color::WHITE,
-        );
-    }
-
-    fn stop(&mut self, _state: &mut Self::State, ctx: &mut StopCtx<Self>) {
-        ctx.scheduler().clear();
-        ctx.tasks().cancel_all();
-    }
-}
-```
-
-## Примечания по стабильности
-
-### Стабильно в v0.1
-- `Widget`
-- `WidgetApp`
-- `Canvas`
-- `WindowsHost`
-- `SoftwareRenderer`
-- порядок lifecycle методов
-- доступ к scheduler и tasks через widget contexts
-
-### Internal или unstable в v0.1
-- raw render internals
-- scene и command structures
-- frame и surface internals
-- детали реализации task backend
-- host internals
-
-## Текущие примечания по реализации
-
-Сейчас в реализации есть:
-
-- Windows host
-- обычное decorated debug window
-- software 2D rendering
-- single-widget runtime
-- demand-driven redraw
-- raw rendering internals остаются нестабильными
+- стабильный low-level raw rendering API
+- более богатые image и text pipeline
+- declarative UI и layout
+- более широкая input model
+- GPU renderer backend
+- hybrid или web-backed integration paths
 
 ## License
 

@@ -18,5 +18,5 @@ runtime-tokio = ["dep:tokio"]
 crossbeam-channel.workspace = true
 futures.workspace = true
 tokio = { workspace = true, optional = true }
-widgetkit-core = { version = "0.1.0", path = "../widgetkit-core" }
-widgetkit-render = { version = "0.1.0", path = "../widgetkit-render" }
+widgetkit-core = { version = "0.2.0", path = "../widgetkit-core" }
+widgetkit-render = { version = "0.2.0", path = "../widgetkit-render" }

@@ -1,6 +1,6 @@
 use crate::{
     scheduler::SchedulerState,
-    tasks::{task_backend, TaskBackend},
+    tasks::{TaskBackend, task_backend},
 };
 use crossbeam_channel::Sender;
 use std::sync::{Arc, Mutex};

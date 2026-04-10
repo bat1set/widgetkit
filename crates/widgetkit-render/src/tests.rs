@@ -174,6 +174,40 @@ fn measure_text_reports_layout_metrics() {
 }
 
 #[test]
+fn clipped_text_draw_stays_inside_the_clip_region() {
+    let mut canvas = Canvas::new(Size::new(24.0, 24.0));
+    canvas.clear(Color::BLACK);
+    canvas.save();
+    canvas.clip_rect(Rect::xywh(8.0, 8.0, 4.0, 4.0));
+    canvas.text(Point::new(8.0, 8.0), "A", TextStyle::new(), Color::WHITE);
+    canvas.restore();
+
+    let mut renderer = SoftwareRenderer::new();
+    let mut surface = MemorySurface::new(24, 24);
+    crate::Renderer::render_frame(&mut renderer, canvas.into_frame(), &mut surface).unwrap();
+
+    let mut white_inside_clip = 0usize;
+    let mut white_outside_clip = 0usize;
+
+    for y in 0..24 {
+        for x in 0..24 {
+            if surface.pixels[y * 24 + x] != Color::WHITE {
+                continue;
+            }
+
+            if (8..12).contains(&x) && (8..12).contains(&y) {
+                white_inside_clip += 1;
+            } else {
+                white_outside_clip += 1;
+            }
+        }
+    }
+
+    assert!(white_inside_clip > 0);
+    assert_eq!(white_outside_clip, 0);
+}
+
+#[test]
 fn experimental_raw_sink_can_emit_low_level_commands() {
     let mut canvas = Canvas::new(Size::new(16.0, 16.0));
     canvas.experimental_raw(|raw: &mut RawCanvas<'_>| {

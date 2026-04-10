@@ -206,4 +206,5 @@ pub enum StateCommand {
 }
 
 // TODO(v0.3): layout-aware text measurement hooks
+// TODO(v0.4): input-related hit-test helpers for shapes
 // TODO(v0.5): ensure command model is sufficient for declarative layer

@@ -59,7 +59,12 @@ impl Widget for LifecycleWidget {
         ctx.post(LifecycleMsg::Boot);
     }
 
-    fn update(&mut self, _state: &mut Self::State, event: Event<Self::Message>, ctx: &mut UpdateCtx<Self>) {
+    fn update(
+        &mut self,
+        _state: &mut Self::State,
+        event: Event<Self::Message>,
+        ctx: &mut UpdateCtx<Self>,
+    ) {
         if let Event::Message(LifecycleMsg::Boot) = event {
             self.log.lock().unwrap().push("update");
             ctx.request_render();
@@ -86,7 +91,9 @@ impl Widget for LifecycleWidget {
 #[test]
 fn lifecycle_runs_in_order() {
     let log = Arc::new(Mutex::new(Vec::new()));
-    let widget = LifecycleWidget { log: Arc::clone(&log) };
+    let widget = LifecycleWidget {
+        log: Arc::clone(&log),
+    };
     let mut runner = AppRunner::new("lifecycle", widget, SoftwareRenderer::new());
     runner.initialize(Size::new(64.0, 32.0)).unwrap();
     let mut surface = MemorySurface::new(64, 32);
@@ -116,11 +123,18 @@ impl Widget for SchedulerWidget {
     fn mount(&mut self, _ctx: &mut MountCtx<Self>) -> Self::State {}
 
     fn start(&mut self, _state: &mut Self::State, ctx: &mut StartCtx<Self>) {
-        ctx.scheduler().after(StdDuration::from_millis(5), SchedulerMsg::Once);
-        ctx.scheduler().every(StdDuration::from_millis(5), SchedulerMsg::Tick);
+        ctx.scheduler()
+            .after(StdDuration::from_millis(5), SchedulerMsg::Once);
+        ctx.scheduler()
+            .every(StdDuration::from_millis(5), SchedulerMsg::Tick);
     }
 
-    fn update(&mut self, _state: &mut Self::State, event: Event<Self::Message>, _ctx: &mut UpdateCtx<Self>) {
+    fn update(
+        &mut self,
+        _state: &mut Self::State,
+        event: Event<Self::Message>,
+        _ctx: &mut UpdateCtx<Self>,
+    ) {
         match event {
             Event::Message(SchedulerMsg::Once) => self.counts.lock().unwrap().0 += 1,
             Event::Message(SchedulerMsg::Tick) => self.counts.lock().unwrap().1 += 1,
@@ -141,7 +155,9 @@ impl Widget for SchedulerWidget {
 #[test]
 fn scheduler_routes_messages_and_reaps_completed_timers() {
     let counts = Arc::new(Mutex::new((0, 0)));
-    let widget = SchedulerWidget { counts: Arc::clone(&counts) };
+    let widget = SchedulerWidget {
+        counts: Arc::clone(&counts),
+    };
     let mut runner = AppRunner::new("scheduler", widget, SoftwareRenderer::new());
     runner.initialize(Size::new(32.0, 32.0)).unwrap();
     assert_eq!(runner.scheduler_active_count(), 2);
@@ -178,7 +194,12 @@ impl Widget for TaskWidget {
         ctx.tasks().spawn(async { TaskMsg::Loaded });
     }
 
-    fn update(&mut self, _state: &mut Self::State, event: Event<Self::Message>, _ctx: &mut UpdateCtx<Self>) {
+    fn update(
+        &mut self,
+        _state: &mut Self::State,
+        event: Event<Self::Message>,
+        _ctx: &mut UpdateCtx<Self>,
+    ) {
         if let Event::Message(TaskMsg::Loaded) = event {
             *self.hits.lock().unwrap() += 1;
         }
@@ -188,7 +209,9 @@ impl Widget for TaskWidget {
 #[test]
 fn task_backend_routes_completions_to_widget_messages() {
     let hits = Arc::new(Mutex::new(0));
-    let widget = TaskWidget { hits: Arc::clone(&hits) };
+    let widget = TaskWidget {
+        hits: Arc::clone(&hits),
+    };
     let mut runner = AppRunner::new("tasks", widget, SoftwareRenderer::new());
     runner.initialize(Size::new(32.0, 32.0)).unwrap();
     thread::sleep(StdDuration::from_millis(10));
@@ -210,7 +233,8 @@ impl Widget for PendingTaskWidget {
     fn mount(&mut self, _ctx: &mut MountCtx<Self>) -> Self::State {}
 
     fn start(&mut self, _state: &mut Self::State, ctx: &mut StartCtx<Self>) {
-        ctx.tasks().spawn(async { future::pending::<PendingTaskMsg>().await });
+        ctx.tasks()
+            .spawn(async { future::pending::<PendingTaskMsg>().await });
     }
 }
 
@@ -238,7 +262,12 @@ impl Widget for GuardWidget {
 
     fn mount(&mut self, _ctx: &mut MountCtx<Self>) -> Self::State {}
 
-    fn update(&mut self, _state: &mut Self::State, event: Event<Self::Message>, _ctx: &mut UpdateCtx<Self>) {
+    fn update(
+        &mut self,
+        _state: &mut Self::State,
+        event: Event<Self::Message>,
+        _ctx: &mut UpdateCtx<Self>,
+    ) {
         if let Event::Message(GuardMsg::Hit) = event {
             *self.hits.lock().unwrap() += 1;
         }
@@ -248,7 +277,9 @@ impl Widget for GuardWidget {
 #[test]
 fn stale_instance_messages_are_ignored_after_shutdown() {
     let hits = Arc::new(Mutex::new(0));
-    let widget = GuardWidget { hits: Arc::clone(&hits) };
+    let widget = GuardWidget {
+        hits: Arc::clone(&hits),
+    };
     let mut runner = AppRunner::new("guard", widget, SoftwareRenderer::new());
     runner.initialize(Size::new(32.0, 32.0)).unwrap();
     let stale_token = runner.test_token();
@@ -286,7 +317,11 @@ impl Widget for CoalescedRedrawWidget {
 #[test]
 fn repeated_render_requests_collapse_until_the_pending_frame_is_rendered() {
     let wakes = Arc::new(AtomicUsize::new(0));
-    let mut runner = AppRunner::new("coalesced-redraw", CoalescedRedrawWidget, SoftwareRenderer::new());
+    let mut runner = AppRunner::new(
+        "coalesced-redraw",
+        CoalescedRedrawWidget,
+        SoftwareRenderer::new(),
+    );
     let wake_count = Arc::clone(&wakes);
     runner.attach_waker(move || {
         wake_count.fetch_add(1, Ordering::SeqCst);

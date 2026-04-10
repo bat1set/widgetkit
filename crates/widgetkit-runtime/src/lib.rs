@@ -1,7 +1,7 @@
-//! Lifecycle-driven runtime for WidgetKit v0.1.
+//! Lifecycle-driven runtime for WidgetKit.
 //! The current runtime scope is intentionally a single widget instance per app/host pair.
 //! All timers and background tasks belong to that widget instance and are shut down with it.
-//! Rendering is demand-driven: hosts redraw only after the runtime requests it.
+//! Rendering is demand-driven and redraw requests are coalesced until the pending frame is consumed.
 
 mod app;
 mod context;

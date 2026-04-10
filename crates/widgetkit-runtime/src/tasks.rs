@@ -2,9 +2,9 @@ use crate::internal::Dispatcher;
 use futures::Future;
 #[cfg(not(feature = "runtime-tokio"))]
 use futures::future::{AbortHandle, Abortable};
-use std::{collections::HashMap, pin::Pin};
 #[cfg(not(feature = "runtime-tokio"))]
 use std::thread;
+use std::{collections::HashMap, pin::Pin};
 use widgetkit_core::TaskId;
 
 pub struct Tasks<'a, M> {
@@ -30,7 +30,8 @@ where
     where
         F: Future<Output = M> + Send + 'static,
     {
-        self.backend.spawn_boxed(Some(name.into()), Box::pin(future))
+        self.backend
+            .spawn_boxed(Some(name.into()), Box::pin(future))
     }
 
     pub fn cancel(&mut self, task_id: TaskId) -> bool {
@@ -127,7 +128,8 @@ where
             }
             dispatcher.finish_task(task_id);
         });
-        self.tasks.insert(task_id, DefaultTaskControl { name, abort_handle });
+        self.tasks
+            .insert(task_id, DefaultTaskControl { name, abort_handle });
         task_id
     }
 
@@ -230,7 +232,8 @@ where
             let _ = dispatcher.post_message(message);
             dispatcher.finish_task(task_id);
         });
-        self.tasks.insert(task_id, TokioTaskControl { name, join_handle });
+        self.tasks
+            .insert(task_id, TokioTaskControl { name, join_handle });
         task_id
     }
 

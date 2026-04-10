@@ -5,7 +5,7 @@ use crate::{
     internal::{DispatchToken, Dispatcher, RuntimeEvent, RuntimeServices, WakeHandle},
     widget::Widget,
 };
-use crossbeam_channel::{unbounded, Receiver, TryRecvError};
+use crossbeam_channel::{Receiver, TryRecvError, unbounded};
 use widgetkit_core::{Error, HostEvent, InstanceId, Result, Size, WidgetId};
 use widgetkit_render::{Canvas, RenderSurface, Renderer};
 

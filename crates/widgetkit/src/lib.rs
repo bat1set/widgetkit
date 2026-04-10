@@ -1,7 +1,6 @@
-//! WidgetKit v0.1 stable surface.
-//! The public default path is `Widget + Canvas + WindowsHost + WidgetApp`.
-//! Runtime orchestration is intentionally single-widget in v0.1.
-//! Rendering is demand-driven rather than tied to a permanent render loop.
+//! WidgetKit stable surface centered on `Widget + Canvas + WindowsHost + WidgetApp`.
+//! Rendering is demand-driven, routed through an explicit `RenderFrame` command model,
+//! and currently targets a single widget instance per app/host pair.
 
 #[cfg(feature = "canvas")]
 pub use widgetkit_core as core;

@@ -112,4 +112,5 @@ pub(crate) fn intersect_rect(a: Rect, b: Rect) -> Option<Rect> {
     Some(Rect::xywh(left, top, right - left, bottom - top))
 }
 
+// TODO(v0.3): monitor/work-area aware rendering constraints if needed
 // TODO(v0.4): improve dirty-region strategy

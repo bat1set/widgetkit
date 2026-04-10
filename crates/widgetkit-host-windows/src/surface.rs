@@ -1,5 +1,5 @@
-use std::{num::NonZeroU32, rc::Rc};
 use softbuffer::{Context, Surface};
+use std::{num::NonZeroU32, rc::Rc};
 use widgetkit_core::{Color, Error, Result};
 use widgetkit_render::RenderSurface;
 use winit::window::Window;
@@ -12,8 +12,10 @@ pub(crate) struct SoftbufferSurface {
 
 impl SoftbufferSurface {
     pub(crate) fn new(window: Rc<Window>) -> Result<Self> {
-        let context = Context::new(window.clone()).map_err(|error| Error::platform(error.to_string()))?;
-        let surface = Surface::new(&context, window.clone()).map_err(|error| Error::platform(error.to_string()))?;
+        let context =
+            Context::new(window.clone()).map_err(|error| Error::platform(error.to_string()))?;
+        let surface = Surface::new(&context, window.clone())
+            .map_err(|error| Error::platform(error.to_string()))?;
         Ok(Self {
             window,
             context,
@@ -40,11 +42,16 @@ impl RenderSurface for SoftbufferSurface {
         self.surface
             .resize(non_zero_width, non_zero_height)
             .map_err(|error| Error::platform(error.to_string()))?;
-        let mut buffer = self.surface.buffer_mut().map_err(|error| Error::platform(error.to_string()))?;
+        let mut buffer = self
+            .surface
+            .buffer_mut()
+            .map_err(|error| Error::platform(error.to_string()))?;
         for (dst, src) in buffer.iter_mut().zip(pixels.iter().copied()) {
             *dst = pack_color(src);
         }
-        buffer.present().map_err(|error| Error::platform(error.to_string()))
+        buffer
+            .present()
+            .map_err(|error| Error::platform(error.to_string()))
     }
 }
 
