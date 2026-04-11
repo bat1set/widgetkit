@@ -10,25 +10,21 @@ language: English, [Russian](README.ru.md)
 [![Renderer](https://img.shields.io/badge/renderer-software%202D-lightgrey)](#)
 [![Status](https://img.shields.io/badge/status-render%20v0.2-green)](#)
 
-WidgetKit is a modular Rust library for building desktop widgets.
+Modular Rust library for building desktop widgets.
 
-It currently focuses on a simple but structured native path:
+Current scope: software 2D rendering on Windows with a demand-driven redraw model and an explicit render pipeline
+exposed through a public `Canvas` API.
 
-- `Widget + Canvas + WindowsHost + WidgetApp`
-- software 2D rendering on Windows
-- demand-driven redraw
-- a clearer render pipeline under the public `Canvas` API
+Core assembly: `Widget + Canvas + WindowsHost + WidgetApp`.
 
-If you want the detailed list of what changed in `v0.2`, see [CHANGELOG.md](CHANGELOG.md).
+For the full list of changes in `v0.2`, see [CHANGELOG.md](CHANGELOG.md).
 
-## What It Feels Like
+## Overview
 
-WidgetKit is still intentionally small, but it already has a usable shape:
-
-- `Canvas` is the main public drawing API
+- `Canvas` — public drawing API
 - rendering goes through `RenderFrame` and `RenderCommand`
 - the runtime owns widget lifecycle, scheduler, tasks, and redraw invalidation
-- the Windows host can run decorated or frameless windows
+- the Windows host supports decorated and frameless windows
 
 ## Quick Start
 
@@ -84,22 +80,12 @@ impl Widget for MyWidget {
 
 ## Examples
 
-The workspace includes:
-
-- `clock`
-- `pulse`
-
-Run them with:
-
 ```bash
 cargo run --example clock --features "windows canvas"
-```
-
-```bash
 cargo run --example pulse --features "windows canvas"
 ```
 
-With the optional Tokio-backed task runtime:
+With the Tokio-backed task runtime:
 
 ```bash
 cargo run --example clock --features "windows canvas runtime-tokio"
@@ -107,13 +93,9 @@ cargo run --example clock --features "windows canvas runtime-tokio"
 
 ## Features
 
-Top-level features:
-
 - `canvas`
 - `windows`
 - `runtime-tokio`
-
-Example dependency setup:
 
 ```toml
 [dependencies]
@@ -132,22 +114,20 @@ widgetkit/
     widgetkit-host-windows
 ```
 
-- `widgetkit`: top-level facade crate
-- `widgetkit-core`: geometry, colors, ids, errors, host events
-- `widgetkit-runtime`: lifecycle, scheduler, tasks, redraw coordination
-- `widgetkit-render`: `Canvas`, render commands, text styles, software renderer
-- `widgetkit-host-windows`: Windows host based on `winit` and `softbuffer`
+- `widgetkit` - top-level facade crate
+- `widgetkit-core` - geometry, colors, ids, errors, host events
+- `widgetkit-runtime` - lifecycle, scheduler, tasks, redraw coordination
+- `widgetkit-render` - `Canvas`, render commands, text styles, software renderer
+- `widgetkit-host-windows` - Windows host built on `winit` and `softbuffer`
 
-## Direction
-
-Planned later:
+## Roadmap
 
 - stable low-level raw rendering API
 - richer image and text pipelines
 - declarative UI and layout
 - broader input model
 - GPU renderer backend
-- hybrid or web-backed integration paths
+- hybrid and web-backed integration paths
 
 ## License
 
