@@ -5,24 +5,24 @@
 language: English, [Russian](README.ru.md)
 
 ---
-[![Version](https://img.shields.io/badge/version-0.2.0-blue)](#)
+[![Version](https://img.shields.io/badge/version-0.2.1-blue)](#)
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)](#)
 [![Renderer](https://img.shields.io/badge/renderer-software%202D-lightgrey)](#)
 [![Status](https://img.shields.io/badge/status-render%20v0.2-green)](#)
 
 Modular Rust library for building desktop widgets.
 
-Current scope: software 2D rendering on Windows with a demand-driven redraw model and an explicit render pipeline
-exposed through a public `Canvas` API.
+Current scope: software 2D rendering on Windows with a demand-driven redraw model and an internal render pipeline
+behind the public `Canvas` API.
 
 Core assembly: `Widget + Canvas + WindowsHost + WidgetApp`.
 
-For the full list of changes in `v0.2`, see [CHANGELOG.md](CHANGELOG.md).
+For the full release history, see [CHANGELOG.md](CHANGELOG.md).
 
 ## Overview
 
 - `Canvas` — public drawing API
-- rendering goes through `RenderFrame` and `RenderCommand`
+- rendering goes through an internal command pipeline
 - the runtime owns widget lifecycle, scheduler, tasks, and redraw invalidation
 - the Windows host supports decorated and frameless windows
 
@@ -99,7 +99,7 @@ cargo run --example clock --features "windows canvas runtime-tokio"
 
 ```toml
 [dependencies]
-widgetkit = { version = "0.2.0", default-features = false, features = ["windows", "canvas"] }
+widgetkit = { version = "0.2.1", default-features = false, features = ["windows", "canvas"] }
 ```
 
 ## Workspace Layout
@@ -117,12 +117,12 @@ widgetkit/
 - `widgetkit` - top-level facade crate
 - `widgetkit-core` - geometry, colors, ids, errors, host events
 - `widgetkit-runtime` - lifecycle, scheduler, tasks, redraw coordination
-- `widgetkit-render` - `Canvas`, render commands, text styles, software renderer
+- `widgetkit-render` - `Canvas`, text styles, software renderer
 - `widgetkit-host-windows` - Windows host built on `winit` and `softbuffer`
 
 ## Roadmap
 
-- stable low-level raw rendering API
+- stable window sizing and configuration APIs
 - richer image and text pipelines
 - declarative UI and layout
 - broader input model

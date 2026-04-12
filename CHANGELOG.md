@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-04-13
+
+### Changed
+
+- narrowed the top-level `widgetkit` facade and prelude back to the stable `Canvas`-first API
+- moved raw render commands, frame types, and `RawCanvas` out of the facade route
+- documented raw command/frame internals as `widgetkit_render::unstable`
+- documented the redraw invalidation model in runtime crate docs and `docs/invalidation.md`
+- updated workspace and crate dependency versions to `0.2.1`
+
+### Notes
+
+- `Canvas` remains the recommended drawing API
+- `Canvas::experimental_raw(...)` remains available through `widgetkit_render`, but its command sink is explicitly
+  unstable
+- `RenderFrame` and `RenderCommand` are no longer promoted by `widgetkit::prelude`
+
 ## [0.2.0] - 2026-04-10
 
 ### Added

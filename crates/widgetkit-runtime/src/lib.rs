@@ -2,6 +2,15 @@
 //! The current runtime scope is intentionally a single widget instance per app/host pair.
 //! All timers and background tasks belong to that widget instance and are shut down with it.
 //! Rendering is demand-driven and redraw requests are coalesced until the pending frame is consumed.
+//!
+//! Redraw invalidation model:
+//!
+//! - `request_render()` marks the current frame dirty.
+//! - repeated render requests before the host consumes the pending frame are coalesced.
+//! - hosts should request redraws on demand instead of running a permanent render loop.
+//! - `shutdown` clears pending redraw state before `dispose` completes.
+//! - late messages, timer completions, task completions, and render requests are ignored once
+//!   their widget instance token no longer matches the live instance.
 
 mod app;
 mod context;
@@ -21,13 +30,13 @@ pub use tasks::Tasks;
 pub use widget::Widget;
 
 pub use widgetkit_core;
-pub use widgetkit_render;
 
-// TODO(v0.2): harden widget instance generation guards across restart/reload boundaries
+// TODO(v0.3): integrate preferred size changes into runtime invalidation model
+// TODO(v0.3): guard against resize-relayout-resize feedback loops
+// TODO(v0.4): route richer host/input events
+// TODO(v0.5): connect sizing contracts to declarative layout
 // TODO(v0.7): allow lifecycle integration with hybrid/native-web host
 // TODO(v0.8): support restart-safe instance isolation guarantees
-// TODO(v0.2): named task handles
-// TODO(v0.2): task cancellation tokens
 // TODO(v0.8): structured concurrency/task groups debug inspection
 // TODO(v0.8): expose task diagnostics/devtools hooks
 // TODO(v0.3): debounce/throttle helpers

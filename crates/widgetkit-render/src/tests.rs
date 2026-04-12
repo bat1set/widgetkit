@@ -1,11 +1,10 @@
 use crate::frame::Frame;
-use crate::model::RenderFrame;
 use crate::raster::Rasterizer;
-use crate::{
-    Canvas, ClearCommand, ClipCommand, ClipPrimitive, Fill, FillCommand, FillShape, Paint,
-    RawCanvas, RenderCommand, RenderSurface, SoftwareRenderer, StateCommand, TextAlign,
-    TextBaseline, TextStyle, Transform, TransformCommand,
+use crate::unstable::{
+    ClearCommand, ClipCommand, ClipPrimitive, Fill, FillCommand, FillShape, Paint, RawCanvas,
+    RenderCommand, RenderFrame, StateCommand, Transform, TransformCommand,
 };
+use crate::{Canvas, RenderSurface, SoftwareRenderer, TextAlign, TextBaseline, TextStyle};
 use widgetkit_core::Result;
 use widgetkit_core::{Color, Point, Rect, Size};
 

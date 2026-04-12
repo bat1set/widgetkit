@@ -9,7 +9,7 @@ use crossbeam_channel::{Receiver, TryRecvError, unbounded};
 use widgetkit_core::{Error, HostEvent, InstanceId, Result, Size, WidgetId};
 use widgetkit_render::{Canvas, RenderSurface, Renderer};
 
-/// v0.1 application bootstrap for a single widget instance bound to one host and one renderer.
+/// Application bootstrap for a single widget instance bound to one host and one renderer.
 /// The runtime is demand-driven and only redraws when widget code requests it.
 pub struct WidgetApp<W = (), H = (), R = ()> {
     widget_name: Option<String>,
@@ -93,7 +93,7 @@ impl Default for WidgetApp<(), (), ()> {
     }
 }
 
-/// v0.1 runtime runner. It intentionally manages exactly one widget instance lifetime.
+/// Runtime runner for one widget instance lifetime.
 /// Timers and tasks are instance-owned and are shut down with `stop`/`dispose`.
 pub struct AppRunner<W, R>
 where

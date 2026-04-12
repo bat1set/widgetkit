@@ -1,6 +1,13 @@
 use crate::{Stroke, TextStyle};
 use widgetkit_core::{Color, Point, Rect, Size};
 
+// Unstable render command model used behind `Canvas`.
+//
+// These types are implementation details for the current software renderer and future backend
+// experiments. They are exposed through `widgetkit_render::unstable` only and should not be
+// treated as a stable WidgetKit application API.
+
+/// Unstable render frame consumed by renderer backends.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RenderFrame {
     size: Size,
@@ -52,6 +59,7 @@ impl CommandList {
     }
 }
 
+/// Unstable low-level drawing command.
 #[derive(Clone, Debug, PartialEq)]
 pub enum RenderCommand {
     Clear(ClearCommand),
@@ -206,5 +214,6 @@ pub enum StateCommand {
 }
 
 // TODO(v0.3): layout-aware text measurement hooks
+// TODO(v0.3): keep raw render internals unstable until post-v0.3 review
 // TODO(v0.4): input-related hit-test helpers for shapes
 // TODO(v0.5): ensure command model is sufficient for declarative layer

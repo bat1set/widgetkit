@@ -13,6 +13,10 @@ pub struct Canvas {
     commands: CommandList,
 }
 
+/// Experimental command sink used by `Canvas::experimental_raw`.
+///
+/// This type is exposed through `widgetkit_render::unstable` only and may change in any `0.x`
+/// release.
 pub struct RawCanvas<'a> {
     commands: &'a mut CommandList,
 }
@@ -87,6 +91,11 @@ impl Canvas {
         self.raw().translate(dx, dy);
     }
 
+    /// Runs an experimental low-level command sink against this canvas.
+    ///
+    /// `RawCanvas` and the command types behind it are available from
+    /// `widgetkit_render::unstable`. They are intentionally not re-exported by the top-level
+    /// `widgetkit` facade and may change in any `0.x` release.
     pub fn experimental_raw(&mut self, f: impl FnOnce(&mut RawCanvas<'_>)) {
         let mut raw = self.raw();
         f(&mut raw);
@@ -98,6 +107,7 @@ impl Canvas {
         }
     }
 
+    #[doc(hidden)]
     pub fn into_frame(self) -> RenderFrame {
         RenderFrame::from_list(self.size, self.commands)
     }

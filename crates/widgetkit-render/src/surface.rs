@@ -1,11 +1,19 @@
-use crate::{Canvas, RenderFrame, frame::Frame, raster::Rasterizer};
+use crate::{Canvas, frame::Frame, raster::Rasterizer, unstable::RenderFrame};
 use widgetkit_core::{Color, Error, Result};
 
+/// Low-level pixel surface consumed by renderer backends.
+///
+/// This contract is still part of WidgetKit's evolving render internals and is not promoted by
+/// the top-level `widgetkit` facade.
 pub trait RenderSurface {
     fn size(&self) -> (u32, u32);
     fn present(&mut self, pixels: &[Color]) -> Result<()>;
 }
 
+/// Low-level renderer backend contract.
+///
+/// `SoftwareRenderer` is the stable renderer users are expected to construct today. Implementing
+/// custom backends directly depends on the unstable frame/command model.
 pub trait Renderer: Send {
     fn render_frame(&mut self, frame: RenderFrame, surface: &mut dyn RenderSurface) -> Result<()>;
 

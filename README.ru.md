@@ -5,24 +5,24 @@
 language: [English](README.md), Russian
 
 ---
-[![Version](https://img.shields.io/badge/version-0.2.0-blue)](#)
+[![Version](https://img.shields.io/badge/version-0.2.1-blue)](#)
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)](#)
 [![Renderer](https://img.shields.io/badge/renderer-software%202D-lightgrey)](#)
 [![Status](https://img.shields.io/badge/status-render%20v0.2-green)](#)
 
 Модульная Rust-библиотека для создания desktop-виджетов.
 
-Текущий охват: software 2D рендеринг на Windows с demand-driven моделью перерисовки и явным render pipeline, доступным
-через публичный `Canvas` API.
+Текущий охват: software 2D рендеринг на Windows с demand-driven моделью перерисовки и внутренним render pipeline
+под публичным `Canvas` API.
 
 Базовая сборка: `Widget + Canvas + WindowsHost + WidgetApp`.
 
-Подробный список изменений в `v0.2` в [CHANGELOG.md](CHANGELOG.md).
+Подробная история релизов в [CHANGELOG.md](CHANGELOG.md).
 
 ## Обзор
 
 - `Canvas` - публичный drawing API
-- рендеринг проходит через `RenderFrame` и `RenderCommand`
+- рендеринг проходит через внутренний command pipeline
 - runtime управляет lifecycle виджета, scheduler, tasks и redraw invalidation
 - Windows host поддерживает decorated и frameless окна
 
@@ -99,7 +99,7 @@ cargo run --example clock --features "windows canvas runtime-tokio"
 
 ```toml
 [dependencies]
-widgetkit = { version = "0.2.0", default-features = false, features = ["windows", "canvas"] }
+widgetkit = { version = "0.2.1", default-features = false, features = ["windows", "canvas"] }
 ```
 
 ## Структура workspace
@@ -117,12 +117,12 @@ widgetkit/
 - `widgetkit` - верхний facade crate
 - `widgetkit-core` - геометрия, цвета, ids, ошибки, host events
 - `widgetkit-runtime` - lifecycle, scheduler, tasks, redraw coordination
-- `widgetkit-render` - `Canvas`, render commands, text styles, software renderer
+- `widgetkit-render` - `Canvas`, text styles, software renderer
 - `widgetkit-host-windows` - Windows host на базе `winit` и `softbuffer`
 
 ## Roadmap
 
-- стабильный low-level raw rendering API
+- стабильные API для размеров и конфигурации окна
 - расширенные image и text pipeline
 - declarative UI и layout
 - расширенная input model
