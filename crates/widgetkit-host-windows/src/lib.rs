@@ -3,4 +3,4 @@
 mod app;
 mod surface;
 
-pub use app::WindowsHost;
+pub use app::{WindowConfig, WindowsHost};

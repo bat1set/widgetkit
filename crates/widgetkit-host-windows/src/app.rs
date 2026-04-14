@@ -8,28 +8,77 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
+const DEFAULT_WINDOW_SIZE: Size = Size::new(320.0, 120.0);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindowConfig {
+    pub size: Option<Size>,
+    pub min_size: Option<Size>,
+    pub max_size: Option<Size>,
+    pub resizable: bool,
+    pub frameless: bool,
+    pub transparent: bool,
+    pub always_on_top: bool,
+    pub visible: bool,
+}
+
+impl WindowConfig {
+    fn normalized(mut self) -> Self {
+        self.size = valid_size(self.size);
+        self.min_size = valid_size(self.min_size);
+        self.max_size = valid_size(self.max_size);
+        self
+    }
+
+    fn resolved_size(self) -> Size {
+        self.size.unwrap_or(DEFAULT_WINDOW_SIZE)
+    }
+}
+
+impl Default for WindowConfig {
+    fn default() -> Self {
+        Self {
+            size: Some(DEFAULT_WINDOW_SIZE),
+            min_size: None,
+            max_size: None,
+            resizable: true,
+            frameless: false,
+            transparent: false,
+            always_on_top: false,
+            visible: true,
+        }
+    }
+}
+
 pub struct WindowsHost {
-    size: Size,
-    standard_top_bar: bool,
+    config: WindowConfig,
 }
 
 impl WindowsHost {
     pub fn new() -> Self {
         Self {
-            size: Size::new(320.0, 120.0),
-            standard_top_bar: true,
+            config: WindowConfig::default(),
         }
+    }
+
+    pub fn with_config(mut self, config: WindowConfig) -> Self {
+        self.config = config.normalized();
+        self
+    }
+
+    pub fn config(&self) -> &WindowConfig {
+        &self.config
     }
 
     pub fn with_size(mut self, size: Size) -> Self {
         if !size.is_empty() {
-            self.size = size;
+            self.config.size = Some(size);
         }
         self
     }
 
     pub fn with_standard_top_bar(mut self, visible: bool) -> Self {
-        self.standard_top_bar = visible;
+        self.config.frameless = !visible;
         self
     }
 }
@@ -122,13 +171,12 @@ where
     }
 
     fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<Rc<Window>> {
+        let config = self.host.config.normalized();
+        let size = config.resolved_size();
         let attributes: WindowAttributes = Window::default_attributes()
             .with_title(self.runner.widget_name())
-            .with_inner_size(LogicalSize::new(
-                self.host.size.width as f64,
-                self.host.size.height as f64,
-            ))
-            .with_decorations(self.host.standard_top_bar);
+            .with_inner_size(LogicalSize::new(size.width as f64, size.height as f64))
+            .with_decorations(!config.frameless);
         let window = event_loop
             .create_window(attributes)
             .map_err(|error| Error::platform(error.to_string()))?;
@@ -241,23 +289,61 @@ where
     }
 }
 
-// TODO(v0.3): placement integration
-// TODO(v0.3): monitor/work-area abstraction
+// TODO(v0.3): apply min/max/resizable/transparent/always-on-top/visible WindowConfig flags
+// TODO(v0.3): add SizePolicy-driven window sizing
+// TODO(v0.3): add initial anchor/offset positioning groundwork
+// TODO(v0.6): integrate reserved/work-area awareness
 // TODO(v0.4): input events routing
 // TODO(v0.7): hybrid host compatibility
 
+fn valid_size(size: Option<Size>) -> Option<Size> {
+    size.filter(|size| !size.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::WindowsHost;
+    use super::{WindowConfig, WindowsHost};
     use widgetkit_core::Size;
 
     #[test]
-    fn windows_host_can_disable_standard_top_bar() {
+    fn windows_host_defaults_to_window_config() {
+        let host = WindowsHost::new();
+
+        assert_eq!(host.config(), &WindowConfig::default());
+    }
+
+    #[test]
+    fn windows_host_uses_window_config() {
+        let config = WindowConfig {
+            size: Some(Size::new(400.0, 240.0)),
+            min_size: Some(Size::new(280.0, 120.0)),
+            max_size: Some(Size::new(640.0, 360.0)),
+            resizable: false,
+            frameless: true,
+            transparent: true,
+            always_on_top: true,
+            visible: false,
+        };
+
+        let host = WindowsHost::new().with_config(config);
+
+        assert_eq!(host.config(), &config);
+    }
+
+    #[test]
+    fn windows_host_size_builder_updates_window_config() {
+        let host = WindowsHost::new().with_size(Size::new(400.0, 240.0));
+
+        assert_eq!(host.config().size, Some(Size::new(400.0, 240.0)));
+    }
+
+    #[test]
+    fn windows_host_can_disable_standard_top_bar_through_config() {
         let host = WindowsHost::new()
             .with_size(Size::new(400.0, 240.0))
             .with_standard_top_bar(false);
 
-        assert_eq!(host.size, Size::new(400.0, 240.0));
-        assert!(!host.standard_top_bar);
+        assert_eq!(host.config().size, Some(Size::new(400.0, 240.0)));
+        assert!(host.config().frameless);
     }
 }
