@@ -1,12 +1,12 @@
 use crate::surface::SoftbufferSurface;
 use std::rc::Rc;
-use widgetkit_core::{Error, HostEvent, Result, Size};
+use widgetkit_core::{Error, HostEvent, Result, Size, SizePolicy};
 use widgetkit_runtime::{AppRunner, HostRunner, Widget};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowAttributes, WindowId};
+use winit::window::{Window, WindowAttributes, WindowId, WindowLevel};
 
 const DEFAULT_WINDOW_SIZE: Size = Size::new(320.0, 120.0);
 
@@ -15,6 +15,7 @@ pub struct WindowConfig {
     pub size: Option<Size>,
     pub min_size: Option<Size>,
     pub max_size: Option<Size>,
+    pub size_policy: SizePolicy,
     pub resizable: bool,
     pub frameless: bool,
     pub transparent: bool,
@@ -27,6 +28,7 @@ impl WindowConfig {
         self.size = valid_size(self.size);
         self.min_size = valid_size(self.min_size);
         self.max_size = valid_size(self.max_size);
+        self.size_policy = normalize_size_policy(self.size_policy, self.size);
         self
     }
 
@@ -41,6 +43,7 @@ impl Default for WindowConfig {
             size: Some(DEFAULT_WINDOW_SIZE),
             min_size: None,
             max_size: None,
+            size_policy: SizePolicy::Fixed(DEFAULT_WINDOW_SIZE),
             resizable: true,
             frameless: false,
             transparent: false,
@@ -73,7 +76,48 @@ impl WindowsHost {
     pub fn with_size(mut self, size: Size) -> Self {
         if !size.is_empty() {
             self.config.size = Some(size);
+            self.config.size_policy = SizePolicy::Fixed(size);
         }
+        self
+    }
+
+    pub fn with_min_size(mut self, size: Size) -> Self {
+        self.config.min_size = valid_size(Some(size));
+        self
+    }
+
+    pub fn with_max_size(mut self, size: Size) -> Self {
+        self.config.max_size = valid_size(Some(size));
+        self
+    }
+
+    pub fn size_policy(mut self, size_policy: SizePolicy) -> Self {
+        self.config.size_policy = normalize_size_policy(size_policy, self.config.size);
+        self
+    }
+
+    pub fn resizable(mut self, resizable: bool) -> Self {
+        self.config.resizable = resizable;
+        self
+    }
+
+    pub fn frameless(mut self, frameless: bool) -> Self {
+        self.config.frameless = frameless;
+        self
+    }
+
+    pub fn transparent(mut self, transparent: bool) -> Self {
+        self.config.transparent = transparent;
+        self
+    }
+
+    pub fn always_on_top(mut self, always_on_top: bool) -> Self {
+        self.config.always_on_top = always_on_top;
+        self
+    }
+
+    pub fn visible(mut self, visible: bool) -> Self {
+        self.config.visible = visible;
         self
     }
 
@@ -172,11 +216,7 @@ where
 
     fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<Rc<Window>> {
         let config = self.host.config.normalized();
-        let size = config.resolved_size();
-        let attributes: WindowAttributes = Window::default_attributes()
-            .with_title(self.runner.widget_name())
-            .with_inner_size(LogicalSize::new(size.width as f64, size.height as f64))
-            .with_decorations(!config.frameless);
+        let attributes = window_attributes(self.runner.widget_name(), config);
         let window = event_loop
             .create_window(attributes)
             .map_err(|error| Error::platform(error.to_string()))?;
@@ -289,8 +329,7 @@ where
     }
 }
 
-// TODO(v0.3): apply min/max/resizable/transparent/always-on-top/visible WindowConfig flags
-// TODO(v0.3): add SizePolicy-driven window sizing
+// TODO(v0.3): connect SizePolicy::Content to preferred size-driven window sizing
 // TODO(v0.3): add initial anchor/offset positioning groundwork
 // TODO(v0.6): integrate reserved/work-area awareness
 // TODO(v0.4): input events routing
@@ -300,10 +339,60 @@ fn valid_size(size: Option<Size>) -> Option<Size> {
     size.filter(|size| !size.is_empty())
 }
 
+fn normalize_size_policy(size_policy: SizePolicy, fallback_size: Option<Size>) -> SizePolicy {
+    match size_policy {
+        SizePolicy::Fixed(size) => {
+            let size = valid_size(Some(size))
+                .or(fallback_size)
+                .unwrap_or(DEFAULT_WINDOW_SIZE);
+            SizePolicy::Fixed(size)
+        }
+        SizePolicy::Content => SizePolicy::Content,
+        SizePolicy::ContentWithLimits { min, max } => SizePolicy::ContentWithLimits {
+            min: valid_size(min),
+            max: valid_size(max),
+        },
+    }
+}
+
+fn window_attributes(title: &str, config: WindowConfig) -> WindowAttributes {
+    let config = config.normalized();
+    let size = config.resolved_size();
+    let mut attributes = Window::default_attributes()
+        .with_title(title)
+        .with_inner_size(logical_size(size))
+        .with_decorations(!config.frameless)
+        .with_resizable(config.resizable)
+        .with_transparent(config.transparent)
+        .with_visible(config.visible)
+        .with_window_level(if config.always_on_top {
+            WindowLevel::AlwaysOnTop
+        } else {
+            WindowLevel::Normal
+        });
+
+    if let Some(min_size) = config.min_size {
+        attributes = attributes.with_min_inner_size(logical_size(min_size));
+    }
+
+    if let Some(max_size) = config.max_size {
+        attributes = attributes.with_max_inner_size(logical_size(max_size));
+    }
+
+    attributes
+}
+
+fn logical_size(size: Size) -> LogicalSize<f64> {
+    LogicalSize::new(size.width as f64, size.height as f64)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{WindowConfig, WindowsHost};
+    use super::{WindowConfig, WindowsHost, window_attributes};
     use widgetkit_core::Size;
+    use widgetkit_core::SizePolicy;
+    use winit::dpi::Size as WinitSize;
+    use winit::window::WindowLevel;
 
     #[test]
     fn windows_host_defaults_to_window_config() {
@@ -318,6 +407,7 @@ mod tests {
             size: Some(Size::new(400.0, 240.0)),
             min_size: Some(Size::new(280.0, 120.0)),
             max_size: Some(Size::new(640.0, 360.0)),
+            size_policy: SizePolicy::Fixed(Size::new(400.0, 240.0)),
             resizable: false,
             frameless: true,
             transparent: true,
@@ -335,6 +425,10 @@ mod tests {
         let host = WindowsHost::new().with_size(Size::new(400.0, 240.0));
 
         assert_eq!(host.config().size, Some(Size::new(400.0, 240.0)));
+        assert_eq!(
+            host.config().size_policy,
+            SizePolicy::Fixed(Size::new(400.0, 240.0))
+        );
     }
 
     #[test]
@@ -345,5 +439,68 @@ mod tests {
 
         assert_eq!(host.config().size, Some(Size::new(400.0, 240.0)));
         assert!(host.config().frameless);
+    }
+
+    #[test]
+    fn windows_host_builders_update_window_config_flags() {
+        let host = WindowsHost::new()
+            .with_min_size(Size::new(200.0, 100.0))
+            .with_max_size(Size::new(800.0, 600.0))
+            .size_policy(SizePolicy::Content)
+            .resizable(false)
+            .frameless(true)
+            .transparent(true)
+            .always_on_top(true)
+            .visible(false);
+
+        assert_eq!(host.config().min_size, Some(Size::new(200.0, 100.0)));
+        assert_eq!(host.config().max_size, Some(Size::new(800.0, 600.0)));
+        assert_eq!(host.config().size_policy, SizePolicy::Content);
+        assert!(!host.config().resizable);
+        assert!(host.config().frameless);
+        assert!(host.config().transparent);
+        assert!(host.config().always_on_top);
+        assert!(!host.config().visible);
+    }
+
+    #[test]
+    fn window_attributes_apply_config_flags() {
+        let attributes = window_attributes(
+            "widget",
+            WindowConfig {
+                size: Some(Size::new(400.0, 240.0)),
+                min_size: Some(Size::new(280.0, 120.0)),
+                max_size: Some(Size::new(640.0, 360.0)),
+                size_policy: SizePolicy::Fixed(Size::new(400.0, 240.0)),
+                resizable: false,
+                frameless: true,
+                transparent: true,
+                always_on_top: true,
+                visible: false,
+            },
+        );
+
+        assert_eq!(attributes.title, "widget");
+        assert_eq!(
+            attributes.inner_size,
+            Some(WinitSize::Logical(logical_size(400.0, 240.0)))
+        );
+        assert_eq!(
+            attributes.min_inner_size,
+            Some(WinitSize::Logical(logical_size(280.0, 120.0)))
+        );
+        assert_eq!(
+            attributes.max_inner_size,
+            Some(WinitSize::Logical(logical_size(640.0, 360.0)))
+        );
+        assert!(!attributes.resizable);
+        assert!(!attributes.decorations);
+        assert!(attributes.transparent);
+        assert_eq!(attributes.window_level, WindowLevel::AlwaysOnTop);
+        assert!(!attributes.visible);
+    }
+
+    fn logical_size(width: f64, height: f64) -> winit::dpi::LogicalSize<f64> {
+        winit::dpi::LogicalSize::new(width, height)
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
-    AppRunner, DisposeCtx, Event, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx, Widget,
-    internal::DispatchToken,
+    AppRunner, DisposeCtx, Event, LayoutCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx,
+    Widget, internal::DispatchToken,
 };
 use futures::future;
 use std::{
@@ -9,7 +9,7 @@ use std::{
     thread,
     time::Duration as StdDuration,
 };
-use widgetkit_core::{Color, Point, Rect, Result, Size};
+use widgetkit_core::{Color, Constraints, Point, Rect, Result, Size};
 use widgetkit_render::{Canvas, RenderSurface, SoftwareRenderer, TextStyle};
 
 #[derive(Default)]
@@ -384,4 +384,39 @@ fn shutdown_clears_pending_redraw_and_skips_late_render_calls() {
     runner.render(&mut surface).unwrap();
 
     assert_eq!(*renders.lock().unwrap(), 0);
+}
+
+struct PreferredSizeWidget;
+
+enum PreferredSizeMsg {}
+
+impl Widget for PreferredSizeWidget {
+    type State = Size;
+    type Message = PreferredSizeMsg;
+
+    fn mount(&mut self, _ctx: &mut MountCtx<Self>) -> Self::State {
+        Size::new(240.0, 90.0)
+    }
+
+    fn preferred_size(&self, state: &Self::State, ctx: &LayoutCtx<Self>) -> Size {
+        ctx.constrain(*state)
+    }
+}
+
+#[test]
+fn preferred_size_uses_layout_constraints() {
+    let mut runner = AppRunner::new(
+        "preferred-size",
+        PreferredSizeWidget,
+        SoftwareRenderer::new(),
+    );
+    runner.initialize(Size::new(320.0, 120.0)).unwrap();
+
+    let constraints =
+        Constraints::new(Some(Size::new(100.0, 100.0)), Some(Size::new(200.0, 180.0)));
+
+    assert_eq!(
+        runner.preferred_size(constraints),
+        Some(Size::new(200.0, 100.0))
+    );
 }

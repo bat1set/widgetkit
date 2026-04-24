@@ -1,12 +1,12 @@
 use crate::{
-    context::{DisposeCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx},
+    context::{DisposeCtx, LayoutCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx},
     event::Event,
     host::HostRunner,
     internal::{DispatchToken, Dispatcher, RuntimeEvent, RuntimeServices, WakeHandle},
     widget::Widget,
 };
 use crossbeam_channel::{Receiver, TryRecvError, unbounded};
-use widgetkit_core::{Error, HostEvent, InstanceId, Result, Size, WidgetId};
+use widgetkit_core::{Constraints, Error, HostEvent, InstanceId, Result, Size, WidgetId};
 use widgetkit_render::{Canvas, RenderSurface, Renderer};
 
 /// Application bootstrap for a single widget instance bound to one host and one renderer.
@@ -159,6 +159,22 @@ where
             self.surface_size = size;
             self.request_render();
         }
+    }
+
+    pub fn preferred_size(&self, constraints: Constraints) -> Option<Size> {
+        if !self.initialized || self.shut_down {
+            return None;
+        }
+
+        self.state.as_ref().map(|state| {
+            let ctx = LayoutCtx::new(
+                self.widget_id,
+                self.instance_id,
+                self.surface_size,
+                constraints,
+            );
+            ctx.constrain(self.widget.preferred_size(state, &ctx))
+        })
     }
 
     pub fn attach_waker<F>(&mut self, wake: F)

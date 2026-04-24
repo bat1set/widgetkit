@@ -1,6 +1,6 @@
 use crate::{internal::RuntimeServices, scheduler::Scheduler, tasks::Tasks, widget::Widget};
 use std::{marker::PhantomData, ptr::NonNull};
-use widgetkit_core::{InstanceId, Size, WidgetId};
+use widgetkit_core::{Constraints, InstanceId, Size, WidgetId};
 
 pub struct MountCtx<W>
 where
@@ -203,6 +203,57 @@ where
 
     pub fn surface_size(&self) -> Size {
         self.surface_size
+    }
+}
+
+pub struct LayoutCtx<W>
+where
+    W: Widget,
+{
+    widget_id: WidgetId,
+    instance_id: InstanceId,
+    available_size: Size,
+    constraints: Constraints,
+    _marker: PhantomData<fn() -> W>,
+}
+
+impl<W> LayoutCtx<W>
+where
+    W: Widget,
+{
+    pub(crate) fn new(
+        widget_id: WidgetId,
+        instance_id: InstanceId,
+        available_size: Size,
+        constraints: Constraints,
+    ) -> Self {
+        Self {
+            widget_id,
+            instance_id,
+            available_size,
+            constraints,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn widget_id(&self) -> WidgetId {
+        self.widget_id
+    }
+
+    pub fn instance_id(&self) -> InstanceId {
+        self.instance_id
+    }
+
+    pub fn available_size(&self) -> Size {
+        self.available_size
+    }
+
+    pub fn constraints(&self) -> Constraints {
+        self.constraints
+    }
+
+    pub fn constrain(&self, size: Size) -> Size {
+        self.constraints.clamp(size)
     }
 }
 

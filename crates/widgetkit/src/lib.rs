@@ -23,8 +23,8 @@ pub mod render {
 
 #[cfg(feature = "canvas")]
 pub use widgetkit_core::{
-    Color, Duration, HostEvent, Insets, InstanceId, Point, Rect, Result, Size, TaskId, TimerId,
-    WidgetId,
+    Color, Constraints, Duration, HostEvent, Insets, InstanceId, Point, Rect, Result, Size,
+    SizePolicy, TaskId, TimerId, WidgetId,
 };
 #[cfg(feature = "windows")]
 pub use widgetkit_host_windows::{WindowConfig, WindowsHost};
@@ -34,17 +34,17 @@ pub use widgetkit_render::{
 };
 #[cfg(feature = "canvas")]
 pub use widgetkit_runtime::{
-    AppRunner, DisposeCtx, Event, HostRunner, MountCtx, RenderCtx, Scheduler, StartCtx, StopCtx,
-    Tasks, UpdateCtx, Widget, WidgetApp,
+    AppRunner, DisposeCtx, Event, HostRunner, LayoutCtx, MountCtx, RenderCtx, Scheduler, StartCtx,
+    StopCtx, Tasks, UpdateCtx, Widget, WidgetApp,
 };
 
 #[cfg(feature = "canvas")]
 pub mod prelude {
     pub use crate::{
-        Canvas, Color, DisposeCtx, Duration, Event, HostEvent, Insets, InstanceId, MountCtx, Point,
-        Rect, RenderCtx, Result, Scheduler, Size, SoftwareRenderer, StartCtx, StopCtx, Stroke,
-        TaskId, Tasks, TextAlign, TextBaseline, TextMetrics, TextStyle, TimerId, UpdateCtx, Widget,
-        WidgetApp, WidgetId,
+        Canvas, Color, Constraints, DisposeCtx, Duration, Event, HostEvent, Insets, InstanceId,
+        LayoutCtx, MountCtx, Point, Rect, RenderCtx, Result, Scheduler, Size, SizePolicy,
+        SoftwareRenderer, StartCtx, StopCtx, Stroke, TaskId, Tasks, TextAlign, TextBaseline,
+        TextMetrics, TextStyle, TimerId, UpdateCtx, Widget, WidgetApp, WidgetId,
     };
     #[cfg(feature = "windows")]
     pub use crate::{WindowConfig, WindowsHost};
