@@ -7,7 +7,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
     sync::{Arc, Mutex},
     thread,
-    time::Duration as StdDuration,
+    time::{Duration as StdDuration, Instant},
 };
 use widgetkit_core::{Color, Constraints, Point, Rect, Result, Size};
 use widgetkit_render::{Canvas, RenderSurface, SoftwareRenderer, TextStyle};
@@ -162,8 +162,14 @@ fn scheduler_routes_messages_and_reaps_completed_timers() {
     runner.initialize(Size::new(32.0, 32.0)).unwrap();
     assert_eq!(runner.scheduler_active_count(), 2);
 
-    thread::sleep(StdDuration::from_millis(18));
-    runner.process_pending().unwrap();
+    let deadline = Instant::now() + StdDuration::from_millis(100);
+    while {
+        let snapshot = *counts.lock().unwrap();
+        (snapshot.0 < 1 || snapshot.1 < 1) && Instant::now() < deadline
+    } {
+        thread::sleep(StdDuration::from_millis(5));
+        runner.process_pending().unwrap();
+    }
     let snapshot = *counts.lock().unwrap();
     assert_eq!(snapshot.0, 1);
     assert!(snapshot.1 >= 1);
@@ -214,8 +220,11 @@ fn task_backend_routes_completions_to_widget_messages() {
     };
     let mut runner = AppRunner::new("tasks", widget, SoftwareRenderer::new());
     runner.initialize(Size::new(32.0, 32.0)).unwrap();
-    thread::sleep(StdDuration::from_millis(10));
-    runner.process_pending().unwrap();
+    let deadline = Instant::now() + StdDuration::from_millis(100);
+    while *hits.lock().unwrap() == 0 && Instant::now() < deadline {
+        thread::sleep(StdDuration::from_millis(5));
+        runner.process_pending().unwrap();
+    }
     runner.shutdown().unwrap();
 
     assert_eq!(*hits.lock().unwrap(), 1);
@@ -399,7 +408,11 @@ impl Widget for PreferredSizeWidget {
     }
 
     fn preferred_size(&self, state: &Self::State, ctx: &LayoutCtx<Self>) -> Size {
-        ctx.constrain(*state)
+        let label = ctx.measure_text("WidgetKit", TextStyle::new().size(16.0));
+        ctx.constrain(Size::new(
+            state.width.max(label.width),
+            state.height.max(label.height),
+        ))
     }
 }
 

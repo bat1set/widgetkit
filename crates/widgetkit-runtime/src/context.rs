@@ -1,6 +1,7 @@
 use crate::{internal::RuntimeServices, scheduler::Scheduler, tasks::Tasks, widget::Widget};
 use std::{marker::PhantomData, ptr::NonNull};
 use widgetkit_core::{Constraints, InstanceId, Size, WidgetId};
+use widgetkit_render::{Canvas, TextMetrics, TextStyle};
 
 pub struct MountCtx<W>
 where
@@ -254,6 +255,10 @@ where
 
     pub fn constrain(&self, size: Size) -> Size {
         self.constraints.clamp(size)
+    }
+
+    pub fn measure_text(&self, text: impl AsRef<str>, style: TextStyle) -> TextMetrics {
+        Canvas::new(self.available_size).measure_text(text, &style)
     }
 }
 

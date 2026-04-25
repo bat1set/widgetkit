@@ -1,14 +1,28 @@
 use crate::surface::SoftbufferSurface;
 use std::rc::Rc;
-use widgetkit_core::{Error, HostEvent, Result, Size, SizePolicy};
+use widgetkit_core::{Constraints, Error, HostEvent, Point, Result, Size, SizePolicy};
 use widgetkit_runtime::{AppRunner, HostRunner, Widget};
 use winit::application::ApplicationHandler;
-use winit::dpi::LogicalSize;
+use winit::dpi::{LogicalPosition, LogicalSize};
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId, WindowLevel};
 
 const DEFAULT_WINDOW_SIZE: Size = Size::new(320.0, 120.0);
+const DEFAULT_OFFSET: Point = Point::new(0.0, 0.0);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Anchor {
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    Center,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WindowConfig {
@@ -21,6 +35,9 @@ pub struct WindowConfig {
     pub transparent: bool,
     pub always_on_top: bool,
     pub visible: bool,
+    pub position: Option<Point>,
+    pub anchor: Option<Anchor>,
+    pub offset: Point,
 }
 
 impl WindowConfig {
@@ -29,6 +46,13 @@ impl WindowConfig {
         self.min_size = valid_size(self.min_size);
         self.max_size = valid_size(self.max_size);
         self.size_policy = normalize_size_policy(self.size_policy, self.size);
+        if let SizePolicy::Fixed(size) = self.size_policy {
+            self.size = Some(size);
+        }
+        if let SizePolicy::ContentWithLimits { min, max } = self.size_policy {
+            self.min_size = self.min_size.or(min);
+            self.max_size = self.max_size.or(max);
+        }
         self
     }
 
@@ -49,6 +73,9 @@ impl Default for WindowConfig {
             transparent: false,
             always_on_top: false,
             visible: true,
+            position: None,
+            anchor: None,
+            offset: DEFAULT_OFFSET,
         }
     }
 }
@@ -121,6 +148,21 @@ impl WindowsHost {
         self
     }
 
+    pub fn position(mut self, position: Point) -> Self {
+        self.config.position = Some(position);
+        self
+    }
+
+    pub fn anchor(mut self, anchor: Anchor) -> Self {
+        self.config.anchor = Some(anchor);
+        self
+    }
+
+    pub fn offset(mut self, x: f32, y: f32) -> Self {
+        self.config.offset = Point::new(x, y);
+        self
+    }
+
     pub fn with_standard_top_bar(mut self, visible: bool) -> Self {
         self.config.frameless = !visible;
         self
@@ -175,6 +217,7 @@ where
     window: Option<Rc<Window>>,
     surface: Option<SoftbufferSurface>,
     exit_error: Option<Error>,
+    last_content_size: Option<Size>,
 }
 
 impl<W, R> WindowsApp<W, R>
@@ -189,6 +232,7 @@ where
             window: None,
             surface: None,
             exit_error: None,
+            last_content_size: None,
         }
     }
 
@@ -211,16 +255,49 @@ where
             self.fail(event_loop, error);
             return;
         }
+        self.apply_content_size_if_needed();
         self.request_redraw_if_needed();
     }
 
     fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<Rc<Window>> {
         let config = self.host.config.normalized();
-        let attributes = window_attributes(self.runner.widget_name(), config);
+        let position = initial_position(config, event_loop);
+        let attributes = window_attributes(self.runner.widget_name(), config, position);
         let window = event_loop
             .create_window(attributes)
             .map_err(|error| Error::platform(error.to_string()))?;
         Ok(Rc::new(window))
+    }
+
+    fn apply_content_size_if_needed(&mut self) {
+        let config = self.host.config.normalized();
+        let Some(constraints) = content_constraints(config) else {
+            return;
+        };
+        let Some(target_size) = self.runner.preferred_size(constraints) else {
+            return;
+        };
+        let Some(window) = self.window.as_ref().cloned() else {
+            return;
+        };
+        if target_size.is_empty() {
+            return;
+        }
+
+        let current = window.inner_size();
+        let current_size = Size::new(current.width as f32, current.height as f32);
+        if same_size(current_size, target_size) || self.last_content_size == Some(target_size) {
+            self.last_content_size = Some(target_size);
+            return;
+        }
+
+        if let Some(actual_size) = window.request_inner_size(logical_size(target_size)) {
+            self.runner.set_surface_size(Size::new(
+                actual_size.width.max(1) as f32,
+                actual_size.height.max(1) as f32,
+            ));
+        }
+        self.last_content_size = Some(target_size);
     }
 }
 
@@ -257,6 +334,7 @@ where
 
         self.window = Some(window);
         self.surface = Some(surface);
+        self.apply_content_size_if_needed();
         self.request_redraw_if_needed();
     }
 
@@ -304,6 +382,7 @@ where
                     self.fail(event_loop, error);
                     return;
                 }
+                self.apply_content_size_if_needed();
                 self.request_redraw_if_needed();
             }
             WindowEvent::RedrawRequested => {
@@ -329,14 +408,24 @@ where
     }
 }
 
-// TODO(v0.3): connect SizePolicy::Content to preferred size-driven window sizing
-// TODO(v0.3): add initial anchor/offset positioning groundwork
+// TODO(v0.3): guard against resize-relayout-resize feedback loops
 // TODO(v0.6): integrate reserved/work-area awareness
 // TODO(v0.4): input events routing
 // TODO(v0.7): hybrid host compatibility
 
 fn valid_size(size: Option<Size>) -> Option<Size> {
     size.filter(|size| !size.is_empty())
+}
+
+fn content_constraints(config: WindowConfig) -> Option<Constraints> {
+    match config.size_policy {
+        SizePolicy::Fixed(_) => None,
+        SizePolicy::Content => Some(Constraints::new(config.min_size, config.max_size)),
+        SizePolicy::ContentWithLimits { min, max } => Some(Constraints::new(
+            min.or(config.min_size),
+            max.or(config.max_size),
+        )),
+    }
 }
 
 fn normalize_size_policy(size_policy: SizePolicy, fallback_size: Option<Size>) -> SizePolicy {
@@ -355,7 +444,11 @@ fn normalize_size_policy(size_policy: SizePolicy, fallback_size: Option<Size>) -
     }
 }
 
-fn window_attributes(title: &str, config: WindowConfig) -> WindowAttributes {
+fn window_attributes(
+    title: &str,
+    config: WindowConfig,
+    position: Option<Point>,
+) -> WindowAttributes {
     let config = config.normalized();
     let size = config.resolved_size();
     let mut attributes = Window::default_attributes()
@@ -371,6 +464,10 @@ fn window_attributes(title: &str, config: WindowConfig) -> WindowAttributes {
             WindowLevel::Normal
         });
 
+    if let Some(position) = position {
+        attributes = attributes.with_position(logical_position(position));
+    }
+
     if let Some(min_size) = config.min_size {
         attributes = attributes.with_min_inner_size(logical_size(min_size));
     }
@@ -382,15 +479,85 @@ fn window_attributes(title: &str, config: WindowConfig) -> WindowAttributes {
     attributes
 }
 
+fn initial_position(config: WindowConfig, event_loop: &ActiveEventLoop) -> Option<Point> {
+    let config = config.normalized();
+    if let Some(position) = config.position {
+        return Some(apply_position_offset(position, config.offset));
+    }
+
+    let anchor = config.anchor?;
+    let monitor = event_loop
+        .primary_monitor()
+        .or_else(|| event_loop.available_monitors().next())?;
+    let monitor_position = monitor.position();
+    let monitor_size = monitor.size();
+
+    Some(anchor_position(
+        anchor,
+        RectLike {
+            x: monitor_position.x as f32,
+            y: monitor_position.y as f32,
+            width: monitor_size.width as f32,
+            height: monitor_size.height as f32,
+        },
+        config.resolved_size(),
+        config.offset,
+    ))
+}
+
+#[derive(Clone, Copy)]
+struct RectLike {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+}
+
+fn anchor_position(anchor: Anchor, bounds: RectLike, window_size: Size, offset: Point) -> Point {
+    let x = match anchor {
+        Anchor::TopLeft | Anchor::Left | Anchor::BottomLeft => bounds.x + offset.x,
+        Anchor::Top | Anchor::Center | Anchor::Bottom => {
+            bounds.x + (bounds.width - window_size.width) * 0.5 + offset.x
+        }
+        Anchor::TopRight | Anchor::Right | Anchor::BottomRight => {
+            bounds.x + bounds.width - window_size.width - offset.x
+        }
+    };
+    let y = match anchor {
+        Anchor::TopLeft | Anchor::Top | Anchor::TopRight => bounds.y + offset.y,
+        Anchor::Left | Anchor::Center | Anchor::Right => {
+            bounds.y + (bounds.height - window_size.height) * 0.5 + offset.y
+        }
+        Anchor::BottomLeft | Anchor::Bottom | Anchor::BottomRight => {
+            bounds.y + bounds.height - window_size.height - offset.y
+        }
+    };
+
+    Point::new(x, y)
+}
+
+fn apply_position_offset(position: Point, offset: Point) -> Point {
+    Point::new(position.x + offset.x, position.y + offset.y)
+}
+
 fn logical_size(size: Size) -> LogicalSize<f64> {
     LogicalSize::new(size.width as f64, size.height as f64)
 }
 
+fn logical_position(position: Point) -> LogicalPosition<f64> {
+    LogicalPosition::new(position.x as f64, position.y as f64)
+}
+
+fn same_size(a: Size, b: Size) -> bool {
+    (a.width - b.width).abs() < 0.5 && (a.height - b.height).abs() < 0.5
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{WindowConfig, WindowsHost, window_attributes};
-    use widgetkit_core::Size;
+    use super::{Anchor, RectLike, WindowConfig, WindowsHost, anchor_position, window_attributes};
     use widgetkit_core::SizePolicy;
+    use widgetkit_core::{Point, Size};
+    use winit::dpi::Position as WinitPosition;
     use winit::dpi::Size as WinitSize;
     use winit::window::WindowLevel;
 
@@ -413,6 +580,9 @@ mod tests {
             transparent: true,
             always_on_top: true,
             visible: false,
+            position: Some(Point::new(12.0, 24.0)),
+            anchor: Some(Anchor::TopRight),
+            offset: Point::new(4.0, 8.0),
         };
 
         let host = WindowsHost::new().with_config(config);
@@ -451,7 +621,10 @@ mod tests {
             .frameless(true)
             .transparent(true)
             .always_on_top(true)
-            .visible(false);
+            .visible(false)
+            .position(Point::new(20.0, 30.0))
+            .anchor(Anchor::BottomRight)
+            .offset(12.0, 16.0);
 
         assert_eq!(host.config().min_size, Some(Size::new(200.0, 100.0)));
         assert_eq!(host.config().max_size, Some(Size::new(800.0, 600.0)));
@@ -461,6 +634,9 @@ mod tests {
         assert!(host.config().transparent);
         assert!(host.config().always_on_top);
         assert!(!host.config().visible);
+        assert_eq!(host.config().position, Some(Point::new(20.0, 30.0)));
+        assert_eq!(host.config().anchor, Some(Anchor::BottomRight));
+        assert_eq!(host.config().offset, Point::new(12.0, 16.0));
     }
 
     #[test]
@@ -477,7 +653,11 @@ mod tests {
                 transparent: true,
                 always_on_top: true,
                 visible: false,
+                position: Some(Point::new(20.0, 30.0)),
+                anchor: None,
+                offset: Point::new(12.0, 16.0),
             },
+            Some(Point::new(32.0, 46.0)),
         );
 
         assert_eq!(attributes.title, "widget");
@@ -498,9 +678,59 @@ mod tests {
         assert!(attributes.transparent);
         assert_eq!(attributes.window_level, WindowLevel::AlwaysOnTop);
         assert!(!attributes.visible);
+        assert_eq!(
+            attributes.position,
+            Some(WinitPosition::Logical(logical_position(32.0, 46.0)))
+        );
+    }
+
+    #[test]
+    fn anchor_position_offsets_from_the_nearest_edges() {
+        let position = anchor_position(
+            Anchor::TopRight,
+            RectLike {
+                x: 0.0,
+                y: 0.0,
+                width: 1920.0,
+                height: 1080.0,
+            },
+            Size::new(320.0, 120.0),
+            Point::new(12.0, 24.0),
+        );
+
+        assert_eq!(position, Point::new(1588.0, 24.0));
+    }
+
+    #[test]
+    fn content_constraints_follow_size_policy_limits() {
+        let constraints = super::content_constraints(WindowConfig {
+            size: None,
+            min_size: None,
+            max_size: None,
+            size_policy: SizePolicy::ContentWithLimits {
+                min: Some(Size::new(120.0, 80.0)),
+                max: Some(Size::new(420.0, 260.0)),
+            },
+            resizable: true,
+            frameless: false,
+            transparent: false,
+            always_on_top: false,
+            visible: true,
+            position: None,
+            anchor: None,
+            offset: Point::new(0.0, 0.0),
+        })
+        .unwrap();
+
+        assert_eq!(constraints.min, Some(Size::new(120.0, 80.0)));
+        assert_eq!(constraints.max, Some(Size::new(420.0, 260.0)));
     }
 
     fn logical_size(width: f64, height: f64) -> winit::dpi::LogicalSize<f64> {
         winit::dpi::LogicalSize::new(width, height)
+    }
+
+    fn logical_position(x: f64, y: f64) -> winit::dpi::LogicalPosition<f64> {
+        winit::dpi::LogicalPosition::new(x, y)
     }
 }

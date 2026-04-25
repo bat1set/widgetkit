@@ -27,7 +27,7 @@ pub use widgetkit_core::{
     SizePolicy, TaskId, TimerId, WidgetId,
 };
 #[cfg(feature = "windows")]
-pub use widgetkit_host_windows::{WindowConfig, WindowsHost};
+pub use widgetkit_host_windows::{Anchor, WindowConfig, WindowsHost};
 #[cfg(feature = "canvas")]
 pub use widgetkit_render::{
     Canvas, SoftwareRenderer, Stroke, TextAlign, TextBaseline, TextMetrics, TextStyle,
@@ -40,14 +40,14 @@ pub use widgetkit_runtime::{
 
 #[cfg(feature = "canvas")]
 pub mod prelude {
+    #[cfg(feature = "windows")]
+    pub use crate::{Anchor, WindowConfig, WindowsHost};
     pub use crate::{
         Canvas, Color, Constraints, DisposeCtx, Duration, Event, HostEvent, Insets, InstanceId,
         LayoutCtx, MountCtx, Point, Rect, RenderCtx, Result, Scheduler, Size, SizePolicy,
         SoftwareRenderer, StartCtx, StopCtx, Stroke, TaskId, Tasks, TextAlign, TextBaseline,
         TextMetrics, TextStyle, TimerId, UpdateCtx, Widget, WidgetApp, WidgetId,
     };
-    #[cfg(feature = "windows")]
-    pub use crate::{WindowConfig, WindowsHost};
 }
 
 // TODO(v0.3): export stable window sizing/config APIs
