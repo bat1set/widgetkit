@@ -5,13 +5,13 @@ use widgetkit_render::RenderSurface;
 use winit::window::Window;
 
 pub(crate) struct SoftbufferSurface {
-    window: Rc<Window>,
-    context: Context<Rc<Window>>,
-    surface: Surface<Rc<Window>, Rc<Window>>,
+    window: Rc<dyn Window>,
+    context: Context<Rc<dyn Window>>,
+    surface: Surface<Rc<dyn Window>, Rc<dyn Window>>,
 }
 
 impl SoftbufferSurface {
-    pub(crate) fn new(window: Rc<Window>) -> Result<Self> {
+    pub(crate) fn new(window: Rc<dyn Window>) -> Result<Self> {
         let context =
             Context::new(window.clone()).map_err(|error| Error::platform(error.to_string()))?;
         let surface = Surface::new(&context, window.clone())
@@ -26,7 +26,7 @@ impl SoftbufferSurface {
 
 impl RenderSurface for SoftbufferSurface {
     fn size(&self) -> (u32, u32) {
-        let size = self.window.inner_size();
+        let size = self.window.surface_size();
         (size.width.max(1), size.height.max(1))
     }
 

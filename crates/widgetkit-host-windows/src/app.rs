@@ -5,6 +5,7 @@ use widgetkit_runtime::{AppRunner, HostRunner, Widget};
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalPosition, LogicalSize};
 use winit::event::WindowEvent;
+use winit::event_loop::run_on_demand::EventLoopExtRunOnDemand;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId, WindowLevel};
 
@@ -181,30 +182,24 @@ where
     R: widgetkit_render::Renderer,
 {
     fn run(self, mut runner: AppRunner<W, R>) -> Result<()> {
-        let event_loop = EventLoop::<HostUserEvent>::with_user_event()
-            .build()
-            .map_err(|error| Error::platform(error.to_string()))?;
+        let mut event_loop =
+            EventLoop::new().map_err(|error| Error::platform(error.to_string()))?;
         event_loop.set_control_flow(ControlFlow::Wait);
         let proxy = event_loop.create_proxy();
         let wake_proxy = proxy.clone();
         runner.attach_waker(move || {
-            let _ = wake_proxy.send_event(HostUserEvent::Wake);
+            wake_proxy.wake_up();
         });
 
         let mut app = WindowsApp::new(self, runner);
         event_loop
-            .run_app(&mut app)
+            .run_app_on_demand(&mut app)
             .map_err(|error| Error::platform(error.to_string()))?;
         if let Some(error) = app.exit_error {
             return Err(error);
         }
         Ok(())
     }
-}
-
-#[derive(Clone, Copy, Debug)]
-enum HostUserEvent {
-    Wake,
 }
 
 struct WindowsApp<W, R>
@@ -214,7 +209,7 @@ where
 {
     host: WindowsHost,
     runner: AppRunner<W, R>,
-    window: Option<Rc<Window>>,
+    window: Option<Rc<dyn Window>>,
     surface: Option<SoftbufferSurface>,
     exit_error: Option<Error>,
     last_content_size: Option<Size>,
@@ -236,7 +231,7 @@ where
         }
     }
 
-    fn fail(&mut self, event_loop: &ActiveEventLoop, error: Error) {
+    fn fail(&mut self, event_loop: &dyn ActiveEventLoop, error: Error) {
         self.exit_error = Some(error);
         let _ = self.runner.shutdown();
         event_loop.exit();
@@ -250,7 +245,7 @@ where
         }
     }
 
-    fn process_runtime(&mut self, event_loop: &ActiveEventLoop) {
+    fn process_runtime(&mut self, event_loop: &dyn ActiveEventLoop) {
         if let Err(error) = self.runner.process_pending() {
             self.fail(event_loop, error);
             return;
@@ -259,14 +254,14 @@ where
         self.request_redraw_if_needed();
     }
 
-    fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<Rc<Window>> {
+    fn create_window(&mut self, event_loop: &dyn ActiveEventLoop) -> Result<Rc<dyn Window>> {
         let config = self.host.config.normalized();
         let position = initial_position(config, event_loop);
         let attributes = window_attributes(self.runner.widget_name(), config, position);
         let window = event_loop
             .create_window(attributes)
             .map_err(|error| Error::platform(error.to_string()))?;
-        Ok(Rc::new(window))
+        Ok(Rc::from(window))
     }
 
     fn apply_content_size_if_needed(&mut self) {
@@ -288,7 +283,7 @@ where
             return;
         }
 
-        let current = window.inner_size();
+        let current = window.surface_size();
         let current_size = Size::new(current.width as f32, current.height as f32);
         let Some(target_size) =
             content_resize_target(current_size, preferred_size, self.last_content_size)
@@ -297,7 +292,7 @@ where
             return;
         };
 
-        if let Some(actual_size) = window.request_inner_size(logical_size(target_size)) {
+        if let Some(actual_size) = window.request_surface_size(logical_size(target_size).into()) {
             self.runner.set_surface_size(Size::new(
                 actual_size.width.max(1) as f32,
                 actual_size.height.max(1) as f32,
@@ -307,12 +302,16 @@ where
     }
 }
 
-impl<W, R> ApplicationHandler<HostUserEvent> for WindowsApp<W, R>
+impl<W, R> ApplicationHandler for WindowsApp<W, R>
 where
     W: Widget,
     R: widgetkit_render::Renderer,
 {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+    fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
+        if self.window.is_some() {
+            return;
+        }
+
         let window = match self.create_window(event_loop) {
             Ok(window) => window,
             Err(error) => {
@@ -329,7 +328,7 @@ where
             }
         };
 
-        let size = window.inner_size();
+        let size = window.surface_size();
         if let Err(error) = self.runner.initialize(Size::new(
             size.width.max(1) as f32,
             size.height.max(1) as f32,
@@ -344,13 +343,13 @@ where
         self.request_redraw_if_needed();
     }
 
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, _event: HostUserEvent) {
+    fn proxy_wake_up(&mut self, event_loop: &dyn ActiveEventLoop) {
         self.process_runtime(event_loop);
     }
 
     fn window_event(
         &mut self,
-        event_loop: &ActiveEventLoop,
+        event_loop: &dyn ActiveEventLoop,
         window_id: WindowId,
         event: WindowEvent,
     ) {
@@ -380,7 +379,7 @@ where
                 }
                 self.request_redraw_if_needed();
             }
-            WindowEvent::Resized(size) => {
+            WindowEvent::SurfaceResized(size) => {
                 if let Err(error) = self.runner.handle_host_event(HostEvent::Resized(Size::new(
                     size.width.max(1) as f32,
                     size.height.max(1) as f32,
@@ -403,14 +402,8 @@ where
         }
     }
 
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
         self.process_runtime(event_loop);
-    }
-
-    fn exiting(&mut self, event_loop: &ActiveEventLoop) {
-        if let Err(error) = self.runner.shutdown() {
-            self.fail(event_loop, error);
-        }
     }
 }
 
@@ -457,9 +450,9 @@ fn window_attributes(
 ) -> WindowAttributes {
     let config = config.normalized();
     let size = config.resolved_size();
-    let mut attributes = Window::default_attributes()
+    let mut attributes = WindowAttributes::default()
         .with_title(title)
-        .with_inner_size(logical_size(size))
+        .with_surface_size(logical_size(size))
         .with_decorations(!config.frameless)
         .with_resizable(config.resizable)
         .with_transparent(config.transparent)
@@ -475,17 +468,17 @@ fn window_attributes(
     }
 
     if let Some(min_size) = config.min_size {
-        attributes = attributes.with_min_inner_size(logical_size(min_size));
+        attributes = attributes.with_min_surface_size(logical_size(min_size));
     }
 
     if let Some(max_size) = config.max_size {
-        attributes = attributes.with_max_inner_size(logical_size(max_size));
+        attributes = attributes.with_max_surface_size(logical_size(max_size));
     }
 
     attributes
 }
 
-fn initial_position(config: WindowConfig, event_loop: &ActiveEventLoop) -> Option<Point> {
+fn initial_position(config: WindowConfig, event_loop: &dyn ActiveEventLoop) -> Option<Point> {
     let config = config.normalized();
     if let Some(position) = config.position {
         return Some(apply_position_offset(position, config.offset));
@@ -495,8 +488,8 @@ fn initial_position(config: WindowConfig, event_loop: &ActiveEventLoop) -> Optio
     let monitor = event_loop
         .primary_monitor()
         .or_else(|| event_loop.available_monitors().next())?;
-    let monitor_position = monitor.position();
-    let monitor_size = monitor.size();
+    let monitor_position = monitor.position()?;
+    let monitor_size = monitor.current_video_mode()?.size();
 
     Some(anchor_position(
         anchor,
@@ -684,15 +677,15 @@ mod tests {
 
         assert_eq!(attributes.title, "widget");
         assert_eq!(
-            attributes.inner_size,
+            attributes.surface_size,
             Some(WinitSize::Logical(logical_size(400.0, 240.0)))
         );
         assert_eq!(
-            attributes.min_inner_size,
+            attributes.min_surface_size,
             Some(WinitSize::Logical(logical_size(280.0, 120.0)))
         );
         assert_eq!(
-            attributes.max_inner_size,
+            attributes.max_surface_size,
             Some(WinitSize::Logical(logical_size(640.0, 360.0)))
         );
         assert!(!attributes.resizable);
