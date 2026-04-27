@@ -5,7 +5,9 @@
 //!
 //! Redraw invalidation model:
 //!
-//! - `request_render()` marks the current frame dirty.
+//! - `request_render()` marks layout and render dirty.
+//! - layout is consumed before host content sizing and can trigger a window resize.
+//! - host resize updates the available surface size, marks layout dirty, and schedules render.
 //! - repeated render requests before the host consumes the pending frame are coalesced.
 //! - hosts should request redraws on demand instead of running a permanent render loop.
 //! - `shutdown` clears pending redraw state before `dispose` completes.
@@ -31,7 +33,6 @@ pub use widget::Widget;
 
 pub use widgetkit_core;
 
-// TODO(v0.3): integrate preferred size changes into runtime invalidation model
 // TODO(v0.3): guard against resize-relayout-resize feedback loops
 // TODO(v0.4): route richer host/input events
 // TODO(v0.5): connect sizing contracts to declarative layout

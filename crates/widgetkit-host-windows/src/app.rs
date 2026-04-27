@@ -270,26 +270,32 @@ where
     }
 
     fn apply_content_size_if_needed(&mut self) {
+        if !self.runner.take_layout_request() {
+            return;
+        }
+
         let config = self.host.config.normalized();
         let Some(constraints) = content_constraints(config) else {
             return;
         };
-        let Some(target_size) = self.runner.preferred_size(constraints) else {
+        let Some(preferred_size) = self.runner.preferred_size(constraints) else {
             return;
         };
         let Some(window) = self.window.as_ref().cloned() else {
             return;
         };
-        if target_size.is_empty() {
+        if preferred_size.is_empty() {
             return;
         }
 
         let current = window.inner_size();
         let current_size = Size::new(current.width as f32, current.height as f32);
-        if same_size(current_size, target_size) || self.last_content_size == Some(target_size) {
-            self.last_content_size = Some(target_size);
+        let Some(target_size) =
+            content_resize_target(current_size, preferred_size, self.last_content_size)
+        else {
+            self.last_content_size = Some(preferred_size);
             return;
-        }
+        };
 
         if let Some(actual_size) = window.request_inner_size(logical_size(target_size)) {
             self.runner.set_surface_size(Size::new(
@@ -552,6 +558,22 @@ fn same_size(a: Size, b: Size) -> bool {
     (a.width - b.width).abs() < 0.5 && (a.height - b.height).abs() < 0.5
 }
 
+fn content_resize_target(
+    current_size: Size,
+    target_size: Size,
+    last_content_size: Option<Size>,
+) -> Option<Size> {
+    if target_size.is_empty() || same_size(current_size, target_size) {
+        return None;
+    }
+
+    if last_content_size == Some(target_size) {
+        return None;
+    }
+
+    Some(target_size)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Anchor, RectLike, WindowConfig, WindowsHost, anchor_position, window_attributes};
@@ -724,6 +746,33 @@ mod tests {
 
         assert_eq!(constraints.min, Some(Size::new(120.0, 80.0)));
         assert_eq!(constraints.max, Some(Size::new(420.0, 260.0)));
+    }
+
+    #[test]
+    fn content_resize_target_coalesces_repeated_target_size() {
+        let target = super::content_resize_target(
+            Size::new(320.0, 120.0),
+            Size::new(420.0, 180.0),
+            Some(Size::new(420.0, 180.0)),
+        );
+
+        assert_eq!(target, None);
+    }
+
+    #[test]
+    fn content_resize_target_skips_current_window_size() {
+        let target =
+            super::content_resize_target(Size::new(420.0, 180.0), Size::new(420.0, 180.0), None);
+
+        assert_eq!(target, None);
+    }
+
+    #[test]
+    fn content_resize_target_requests_changed_size() {
+        let target =
+            super::content_resize_target(Size::new(320.0, 120.0), Size::new(420.0, 180.0), None);
+
+        assert_eq!(target, Some(Size::new(420.0, 180.0)));
     }
 
     fn logical_size(width: f64, height: f64) -> winit::dpi::LogicalSize<f64> {

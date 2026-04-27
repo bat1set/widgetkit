@@ -339,6 +339,9 @@ fn repeated_render_requests_collapse_until_the_pending_frame_is_rendered() {
     runner.initialize(Size::new(32.0, 32.0)).unwrap();
 
     assert_eq!(wakes.load(Ordering::SeqCst), 1);
+    assert!(runner.needs_layout());
+    assert!(runner.take_layout_request());
+    assert!(!runner.take_layout_request());
     assert!(runner.needs_redraw());
     assert!(runner.take_redraw_request());
     assert!(!runner.take_redraw_request());
@@ -348,6 +351,33 @@ fn repeated_render_requests_collapse_until_the_pending_frame_is_rendered() {
 
     assert!(!runner.needs_redraw());
     assert!(!runner.take_redraw_request());
+}
+
+#[test]
+fn host_resize_marks_layout_and_render_dirty() {
+    let mut runner = AppRunner::new(
+        "resize-invalidation",
+        CoalescedRedrawWidget,
+        SoftwareRenderer::new(),
+    );
+    runner.initialize(Size::new(32.0, 32.0)).unwrap();
+
+    assert!(runner.take_layout_request());
+    assert!(runner.take_redraw_request());
+    let mut surface = MemorySurface::new(32, 32);
+    runner.render(&mut surface).unwrap();
+
+    assert!(!runner.needs_layout());
+    assert!(!runner.needs_redraw());
+
+    runner
+        .handle_host_event(widgetkit_core::HostEvent::Resized(Size::new(96.0, 48.0)))
+        .unwrap();
+
+    assert!(runner.needs_layout());
+    assert!(runner.needs_redraw());
+    assert!(runner.take_layout_request());
+    assert!(runner.take_redraw_request());
 }
 
 struct LateRenderWidget {
@@ -427,6 +457,34 @@ fn preferred_size_uses_layout_constraints() {
 
     let constraints =
         Constraints::new(Some(Size::new(100.0, 100.0)), Some(Size::new(200.0, 180.0)));
+
+    assert_eq!(
+        runner.preferred_size(constraints),
+        Some(Size::new(200.0, 100.0))
+    );
+}
+
+struct DefaultPreferredSizeWidget;
+
+enum DefaultPreferredSizeMsg {}
+
+impl Widget for DefaultPreferredSizeWidget {
+    type State = ();
+    type Message = DefaultPreferredSizeMsg;
+
+    fn mount(&mut self, _ctx: &mut MountCtx<Self>) -> Self::State {}
+}
+
+#[test]
+fn default_preferred_size_uses_constrained_available_size() {
+    let mut runner = AppRunner::new(
+        "default-preferred-size",
+        DefaultPreferredSizeWidget,
+        SoftwareRenderer::new(),
+    );
+    runner.initialize(Size::new(320.0, 120.0)).unwrap();
+
+    let constraints = Constraints::new(Some(Size::new(100.0, 80.0)), Some(Size::new(200.0, 100.0)));
 
     assert_eq!(
         runner.preferred_size(constraints),

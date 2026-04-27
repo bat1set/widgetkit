@@ -246,6 +246,14 @@ where
         self.services.needs_redraw()
     }
 
+    pub fn needs_layout(&self) -> bool {
+        self.services.needs_layout()
+    }
+
+    pub fn take_layout_request(&mut self) -> bool {
+        self.initialized && !self.shut_down && self.services.take_layout_request()
+    }
+
     pub fn take_redraw_request(&mut self) -> bool {
         self.initialized && !self.shut_down && self.services.take_redraw_request()
     }

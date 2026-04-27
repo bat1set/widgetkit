@@ -31,7 +31,7 @@ pub(crate) struct RuntimeServices<M> {
     pub(crate) dispatcher: Dispatcher<M>,
     pub(crate) scheduler: SchedulerState<M>,
     pub(crate) tasks: Box<dyn TaskBackend<M>>,
-    redraw: RedrawState,
+    invalidation: InvalidationState,
 }
 
 impl<M> RuntimeServices<M>
@@ -43,32 +43,40 @@ where
             dispatcher: dispatcher.clone(),
             scheduler: SchedulerState::new(dispatcher.clone()),
             tasks: task_backend(dispatcher),
-            redraw: RedrawState::default(),
+            invalidation: InvalidationState::default(),
         }
     }
 
     pub(crate) fn request_render(&mut self) -> bool {
-        self.redraw.request()
+        self.invalidation.request_render()
     }
 
     pub(crate) fn needs_redraw(&self) -> bool {
-        self.redraw.is_dirty()
+        self.invalidation.is_render_dirty()
     }
 
     pub(crate) fn take_redraw_request(&mut self) -> bool {
-        self.redraw.take_request()
+        self.invalidation.take_render_request()
     }
 
     pub(crate) fn begin_render(&mut self) -> bool {
-        self.redraw.begin_render()
+        self.invalidation.begin_render()
     }
 
     pub(crate) fn finish_render(&mut self) {
-        self.redraw.finish_render();
+        self.invalidation.finish_render();
+    }
+
+    pub(crate) fn needs_layout(&self) -> bool {
+        self.invalidation.is_layout_dirty()
+    }
+
+    pub(crate) fn take_layout_request(&mut self) -> bool {
+        self.invalidation.take_layout_request()
     }
 
     pub(crate) fn clear_redraw(&mut self) {
-        self.redraw.clear();
+        self.invalidation.clear();
     }
 }
 
@@ -110,52 +118,65 @@ impl WakeHandle {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct RedrawState {
-    dirty: bool,
-    scheduled: bool,
+struct InvalidationState {
+    render_dirty: bool,
+    render_scheduled: bool,
+    layout_dirty: bool,
 }
 
-impl RedrawState {
-    fn request(&mut self) -> bool {
-        if self.dirty {
+impl InvalidationState {
+    fn request_render(&mut self) -> bool {
+        let should_wake = !self.render_dirty;
+        self.render_dirty = true;
+        self.layout_dirty = true;
+        should_wake
+    }
+
+    fn is_render_dirty(self) -> bool {
+        self.render_dirty
+    }
+
+    fn is_layout_dirty(self) -> bool {
+        self.layout_dirty
+    }
+
+    fn take_layout_request(&mut self) -> bool {
+        if !self.layout_dirty {
             return false;
         }
 
-        self.dirty = true;
+        self.layout_dirty = false;
         true
     }
 
-    fn is_dirty(self) -> bool {
-        self.dirty
-    }
-
-    fn take_request(&mut self) -> bool {
-        if !self.dirty || self.scheduled {
+    fn take_render_request(&mut self) -> bool {
+        if !self.render_dirty || self.render_scheduled {
             return false;
         }
 
-        self.scheduled = true;
+        self.render_scheduled = true;
         true
     }
 
     fn begin_render(&mut self) -> bool {
-        if !self.dirty {
-            self.scheduled = false;
+        if !self.render_dirty {
+            self.render_scheduled = false;
             return false;
         }
 
-        self.scheduled = false;
+        self.render_scheduled = false;
         true
     }
 
     fn finish_render(&mut self) {
-        self.dirty = false;
-        self.scheduled = false;
+        self.render_dirty = false;
+        self.render_scheduled = false;
     }
 
     fn clear(&mut self) {
-        self.dirty = false;
-        self.scheduled = false;
+        self.render_dirty = false;
+        self.render_scheduled = false;
+        self.layout_dirty = false;
     }
 }
 

@@ -73,7 +73,7 @@ where
         let _ = services.dispatcher.post_message(message);
     }
 
-    /// Marks the current frame dirty and wakes the host if this is the first pending redraw.
+    /// Marks layout and render dirty, then wakes the host if this is the first pending redraw.
     ///
     /// Repeated calls before the host consumes the pending frame are coalesced into one redraw.
     pub fn request_render(&mut self) {
@@ -142,7 +142,7 @@ where
         let _ = services.dispatcher.post_message(message);
     }
 
-    /// Marks the current frame dirty and wakes the host if this is the first pending redraw.
+    /// Marks layout and render dirty, then wakes the host if this is the first pending redraw.
     ///
     /// Repeated calls before the host consumes the pending frame are coalesced into one redraw.
     pub fn request_render(&mut self) {
