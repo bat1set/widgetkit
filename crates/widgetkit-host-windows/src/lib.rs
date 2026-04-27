@@ -3,4 +3,4 @@
 mod app;
 mod surface;
 
-pub use app::{Anchor, WindowConfig, WindowsHost};
+pub use app::{Anchor, PositionConfig, WindowConfig, WindowsHost};

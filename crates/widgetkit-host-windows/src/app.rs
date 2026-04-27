@@ -26,6 +26,50 @@ pub enum Anchor {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PositionConfig {
+    pub point: Option<Point>,
+    pub anchor: Option<Anchor>,
+    pub offset: Point,
+}
+
+impl PositionConfig {
+    pub const fn new() -> Self {
+        Self {
+            point: None,
+            anchor: None,
+            offset: DEFAULT_OFFSET,
+        }
+    }
+
+    pub const fn at(point: Point) -> Self {
+        Self {
+            point: Some(point),
+            anchor: None,
+            offset: DEFAULT_OFFSET,
+        }
+    }
+
+    pub const fn anchored(anchor: Anchor) -> Self {
+        Self {
+            point: None,
+            anchor: Some(anchor),
+            offset: DEFAULT_OFFSET,
+        }
+    }
+
+    pub const fn with_offset(mut self, offset: Point) -> Self {
+        self.offset = offset;
+        self
+    }
+}
+
+impl Default for PositionConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WindowConfig {
     pub size: Option<Size>,
     pub min_size: Option<Size>,
@@ -36,9 +80,7 @@ pub struct WindowConfig {
     pub transparent: bool,
     pub always_on_top: bool,
     pub visible: bool,
-    pub position: Option<Point>,
-    pub anchor: Option<Anchor>,
-    pub offset: Point,
+    pub position: PositionConfig,
 }
 
 impl WindowConfig {
@@ -74,9 +116,7 @@ impl Default for WindowConfig {
             transparent: false,
             always_on_top: false,
             visible: true,
-            position: None,
-            anchor: None,
-            offset: DEFAULT_OFFSET,
+            position: PositionConfig::default(),
         }
     }
 }
@@ -150,17 +190,24 @@ impl WindowsHost {
     }
 
     pub fn position(mut self, position: Point) -> Self {
-        self.config.position = Some(position);
+        self.config.position.point = Some(position);
+        self.config.position.anchor = None;
         self
     }
 
     pub fn anchor(mut self, anchor: Anchor) -> Self {
-        self.config.anchor = Some(anchor);
+        self.config.position.point = None;
+        self.config.position.anchor = Some(anchor);
+        self
+    }
+
+    pub fn position_config(mut self, position: PositionConfig) -> Self {
+        self.config.position = position;
         self
     }
 
     pub fn offset(mut self, x: f32, y: f32) -> Self {
-        self.config.offset = Point::new(x, y);
+        self.config.position.offset = Point::new(x, y);
         self
     }
 
@@ -480,11 +527,12 @@ fn window_attributes(
 
 fn initial_position(config: WindowConfig, event_loop: &dyn ActiveEventLoop) -> Option<Point> {
     let config = config.normalized();
-    if let Some(position) = config.position {
-        return Some(apply_position_offset(position, config.offset));
+    let position = config.position;
+    if let Some(point) = position.point {
+        return Some(apply_position_offset(point, position.offset));
     }
 
-    let anchor = config.anchor?;
+    let anchor = position.anchor?;
     let monitor = event_loop
         .primary_monitor()
         .or_else(|| event_loop.available_monitors().next())?;
@@ -500,7 +548,7 @@ fn initial_position(config: WindowConfig, event_loop: &dyn ActiveEventLoop) -> O
             height: monitor_size.height as f32,
         },
         config.resolved_size(),
-        config.offset,
+        position.offset,
     ))
 }
 
@@ -569,7 +617,10 @@ fn content_resize_target(
 
 #[cfg(test)]
 mod tests {
-    use super::{Anchor, RectLike, WindowConfig, WindowsHost, anchor_position, window_attributes};
+    use super::{
+        Anchor, PositionConfig, RectLike, WindowConfig, WindowsHost, anchor_position,
+        window_attributes,
+    };
     use widgetkit_core::SizePolicy;
     use widgetkit_core::{Point, Size};
     use winit::dpi::Position as WinitPosition;
@@ -595,9 +646,7 @@ mod tests {
             transparent: true,
             always_on_top: true,
             visible: false,
-            position: Some(Point::new(12.0, 24.0)),
-            anchor: Some(Anchor::TopRight),
-            offset: Point::new(4.0, 8.0),
+            position: PositionConfig::anchored(Anchor::TopRight).with_offset(Point::new(4.0, 8.0)),
         };
 
         let host = WindowsHost::new().with_config(config);
@@ -649,9 +698,20 @@ mod tests {
         assert!(host.config().transparent);
         assert!(host.config().always_on_top);
         assert!(!host.config().visible);
-        assert_eq!(host.config().position, Some(Point::new(20.0, 30.0)));
-        assert_eq!(host.config().anchor, Some(Anchor::BottomRight));
-        assert_eq!(host.config().offset, Point::new(12.0, 16.0));
+        assert_eq!(host.config().position.point, None);
+        assert_eq!(host.config().position.anchor, Some(Anchor::BottomRight));
+        assert_eq!(host.config().position.offset, Point::new(12.0, 16.0));
+    }
+
+    #[test]
+    fn windows_host_accepts_explicit_position_config() {
+        let host = WindowsHost::new().position_config(
+            PositionConfig::at(Point::new(20.0, 30.0)).with_offset(Point::new(4.0, 8.0)),
+        );
+
+        assert_eq!(host.config().position.point, Some(Point::new(20.0, 30.0)));
+        assert_eq!(host.config().position.anchor, None);
+        assert_eq!(host.config().position.offset, Point::new(4.0, 8.0));
     }
 
     #[test]
@@ -668,9 +728,8 @@ mod tests {
                 transparent: true,
                 always_on_top: true,
                 visible: false,
-                position: Some(Point::new(20.0, 30.0)),
-                anchor: None,
-                offset: Point::new(12.0, 16.0),
+                position: PositionConfig::at(Point::new(20.0, 30.0))
+                    .with_offset(Point::new(12.0, 16.0)),
             },
             Some(Point::new(32.0, 46.0)),
         );
@@ -731,9 +790,7 @@ mod tests {
             transparent: false,
             always_on_top: false,
             visible: true,
-            position: None,
-            anchor: None,
-            offset: Point::new(0.0, 0.0),
+            position: PositionConfig::default(),
         })
         .unwrap();
 
