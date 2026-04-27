@@ -17,10 +17,10 @@ windows = ["canvas", "dep:widgetkit-host-windows"]
 runtime-tokio = ["canvas", "widgetkit-runtime/runtime-tokio"]
 
 [dependencies]
-widgetkit-core = { version = "0.2.1", path = "../widgetkit-core", optional = true }
-widgetkit-render = { version = "0.2.1", path = "../widgetkit-render", optional = true }
-widgetkit-runtime = { version = "0.2.1", path = "../widgetkit-runtime", optional = true, default-features = false }
-widgetkit-host-windows = { version = "0.2.1", path = "../widgetkit-host-windows", optional = true }
+widgetkit-core = { version = "0.3.0", path = "../widgetkit-core", optional = true }
+widgetkit-render = { version = "0.3.0", path = "../widgetkit-render", optional = true }
+widgetkit-runtime = { version = "0.3.0", path = "../widgetkit-runtime", optional = true, default-features = false }
+widgetkit-host-windows = { version = "0.3.0", path = "../widgetkit-host-windows", optional = true }
 
 [dev-dependencies]
 chrono.workspace = true

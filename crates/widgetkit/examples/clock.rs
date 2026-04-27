@@ -8,8 +8,13 @@ fn main() -> widgetkit::Result<()> {
         .widget("clock", ClockWidget)
         .host(
             WindowsHost::new()
-                .with_size(Size::new(360.0, 135.0))
-                .with_standard_top_bar(false),
+                .size_policy(SizePolicy::ContentWithLimits {
+                    min: Some(Size::new(280.0, 112.0)),
+                    max: Some(Size::new(520.0, 180.0)),
+                })
+                .frameless(true)
+                .transparent(true)
+                .always_on_top(true),
         )
         .renderer(SoftwareRenderer::new())
         .run()
@@ -44,7 +49,7 @@ impl Widget for ClockWidget {
 
     fn start(&mut self, _state: &mut Self::State, ctx: &mut StartCtx<Self>) {
         ctx.scheduler()
-            .every(std::time::Duration::from_secs(1), Msg::Tick);
+            .every(Duration::from_secs(1), Msg::Tick);
         ctx.tasks().spawn_named("load-status", async {
             Msg::StatusLoaded("software renderer + render frame ready".to_string())
         });
@@ -70,17 +75,37 @@ impl Widget for ClockWidget {
         }
     }
 
-    fn render(&self, state: &Self::State, canvas: &mut Canvas, _ctx: &RenderCtx<Self>) {
+    fn preferred_size(&self, state: &Self::State, ctx: &LayoutCtx<Self>) -> Size {
+        let title = ctx.measure_text("WidgetKit", TextStyle::new().size(16.0));
+        let time = ctx.measure_text(&state.time_text, TextStyle::new().size(24.0));
+        let status = ctx.measure_text(
+            &state.status,
+            TextStyle::new()
+                .size(10.0)
+                .line_height(12.0)
+                .baseline(TextBaseline::Bottom),
+        );
+
+        let width = title.width.max(time.width).max(status.width) + 64.0;
+        let height = title.height + time.height + status.height + 64.0;
+
+        ctx.constrain(Size::new(width, height))
+    }
+
+    fn render(&self, state: &Self::State, canvas: &mut Canvas, ctx: &RenderCtx<Self>) {
         let bg = Color::rgb(14, 17, 22);
         let card = Color::rgb(30, 36, 48);
         let muted = Color::rgb(190, 198, 212);
         let divider = Color::rgba(255, 255, 255, 32);
+        let size = ctx.surface_size();
+        let card_rect = Rect::xywh(12.0, 12.0, size.width - 24.0, size.height - 24.0);
+        let divider_y = 45.0;
 
         canvas.clear(bg);
 
         canvas.save();
-        canvas.clip_rect(Rect::xywh(12.0, 12.0, 336.0, 112.0));
-        canvas.round_rect(Rect::xywh(12.0, 12.0, 336.0, 112.0), 18.0, card);
+        canvas.clip_rect(card_rect);
+        canvas.round_rect(card_rect, 18.0, card);
 
         canvas.text(
             Point::new(28.0, 28.0),
@@ -90,8 +115,8 @@ impl Widget for ClockWidget {
         );
 
         canvas.line(
-            Point::new(24.0, 45.0),
-            Point::new(324.0, 45.0),
+            Point::new(24.0, divider_y),
+            Point::new(size.width - 36.0, divider_y),
             Stroke::new(1.0),
             divider,
         );
@@ -103,10 +128,10 @@ impl Widget for ClockWidget {
             Color::WHITE,
         );
 
-        canvas.circle(Point::new(312.0, 30.0), 6.0, state.accent);
+        canvas.circle(Point::new(size.width - 48.0, 30.0), 6.0, state.accent);
 
         canvas.text(
-            Point::new(28.0, 98.0),
+            Point::new(28.0, size.height - 25.0),
             &state.status,
             TextStyle::new()
                 .size(10.0)

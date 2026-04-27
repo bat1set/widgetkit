@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-04-27
+
+### Added
+
+- `WindowConfig` as the Windows host configuration model
+- host flags for frameless, transparent, resizable, visible, min/max size, and always-on-top windows
+- `SizePolicy` with `Fixed`, `Content`, and `ContentWithLimits` modes
+- `LayoutCtx` and `Widget::preferred_size(...)` for intrinsic/content-driven sizing
+- `LayoutCtx::measure_text(...)` for preferred-size calculations
+- `Anchor` and `PositionConfig` for initial host positioning groundwork
+- tests for window config, size policy limits, preferred sizing, text measurement, content resize coalescing, and
+  resize-loop guards
+
+### Changed
+
+- connected preferred-size recomputation to Windows host sizing
+- split layout invalidation from render redraw invalidation
+- updated the `clock` example to use content sizing and host window flags
+- refreshed README files as first-impression docs and moved release detail here
+- bumped workspace and crate versions from `0.2.1` to `0.3.0`
+
+### Notes
+
+- `v0.3.0` adds window/layout foundations, not a full layout engine
+- declarative UI, smart placement, click-through behavior, and overlay semantics remain future work
+
 ## [0.2.1] - 2026-04-13
 
 ### Changed
@@ -9,7 +35,7 @@ All notable changes to this project will be documented in this file.
 - narrowed the top-level `widgetkit` facade and prelude back to the stable `Canvas`-first API
 - moved raw render commands, frame types, and `RawCanvas` out of the facade route
 - documented raw command/frame internals as `widgetkit_render::unstable`
-- documented the redraw invalidation model in runtime crate docs and `docs/invalidation.md`
+- documented the redraw invalidation model in runtime
 - updated workspace and crate dependency versions to `0.2.1`
 
 ### Notes
