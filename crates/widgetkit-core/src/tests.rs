@@ -1,5 +1,6 @@
 use crate::{
-    Color, Constraints, Insets, InstanceId, Rect, Size, SizePolicy, TaskId, TimerId, WidgetId,
+    Color, Constraints, HostEvent, Insets, InstanceId, Key, KeyboardEvent, MouseButton, MouseEvent,
+    MouseWheelDelta, Point, Rect, Size, SizePolicy, TaskId, TimerId, WidgetId,
 };
 
 #[test]
@@ -40,5 +41,39 @@ fn fixed_size_policy_maps_to_fixed_constraints() {
     assert_eq!(
         SizePolicy::Fixed(size).constraints(),
         Constraints::new(Some(size), Some(size))
+    );
+}
+
+#[test]
+fn host_event_model_carries_input_events() {
+    assert_eq!(
+        HostEvent::Mouse(MouseEvent::Pressed {
+            button: MouseButton::Left,
+            position: Point::new(12.0, 8.0),
+        }),
+        HostEvent::Mouse(MouseEvent::Pressed {
+            button: MouseButton::Left,
+            position: Point::new(12.0, 8.0),
+        })
+    );
+
+    assert_eq!(
+        HostEvent::Mouse(MouseEvent::Wheel {
+            delta: MouseWheelDelta::LineDelta { x: 0.0, y: -1.0 },
+            position: Point::new(12.0, 8.0),
+        }),
+        HostEvent::Mouse(MouseEvent::Wheel {
+            delta: MouseWheelDelta::LineDelta { x: 0.0, y: -1.0 },
+            position: Point::new(12.0, 8.0),
+        })
+    );
+
+    assert_eq!(
+        HostEvent::Keyboard(KeyboardEvent::Pressed {
+            key: Key::Named("Enter".to_string()),
+        }),
+        HostEvent::Keyboard(KeyboardEvent::Pressed {
+            key: Key::Named("Enter".to_string()),
+        })
     );
 }

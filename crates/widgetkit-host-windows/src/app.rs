@@ -1,12 +1,18 @@
 use crate::surface::SoftbufferSurface;
 use std::rc::Rc;
-use widgetkit_core::{Constraints, Error, HostEvent, Point, Result, Size, SizePolicy};
+use widgetkit_core::{
+    Constraints, Error, HostEvent, Key, KeyboardEvent, MouseButton, MouseEvent, MouseWheelDelta,
+    Point, Result, Size, SizePolicy,
+};
 use widgetkit_runtime::{AppRunner, HostRunner, Widget};
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalPosition, LogicalSize};
-use winit::event::WindowEvent;
+use winit::event::{
+    ButtonSource, ElementState, Ime, MouseButton as WinitMouseButton, MouseScrollDelta, WindowEvent,
+};
 use winit::event_loop::run_on_demand::EventLoopExtRunOnDemand;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::keyboard::Key as WinitKey;
 use winit::window::{Window, WindowAttributes, WindowId, WindowLevel};
 
 const DEFAULT_WINDOW_SIZE: Size = Size::new(320.0, 120.0);
@@ -260,6 +266,7 @@ where
     surface: Option<SoftbufferSurface>,
     exit_error: Option<Error>,
     last_content_size: Option<Size>,
+    last_pointer_position: Point,
 }
 
 impl<W, R> WindowsApp<W, R>
@@ -275,6 +282,7 @@ where
             surface: None,
             exit_error: None,
             last_content_size: None,
+            last_pointer_position: Point::new(0.0, 0.0),
         }
     }
 
@@ -282,6 +290,14 @@ where
         self.exit_error = Some(error);
         let _ = self.runner.shutdown();
         event_loop.exit();
+    }
+
+    fn handle_host_event(&mut self, event_loop: &dyn ActiveEventLoop, event: HostEvent) -> bool {
+        if let Err(error) = self.runner.handle_host_event(event) {
+            self.fail(event_loop, error);
+            return false;
+        }
+        true
     }
 
     fn request_redraw_if_needed(&mut self) {
@@ -409,8 +425,7 @@ where
 
         match event {
             WindowEvent::CloseRequested => {
-                if let Err(error) = self.runner.handle_host_event(HostEvent::CloseRequested) {
-                    self.fail(event_loop, error);
+                if !self.handle_host_event(event_loop, HostEvent::CloseRequested) {
                     return;
                 }
                 if let Err(error) = self.runner.shutdown() {
@@ -420,21 +435,129 @@ where
                 event_loop.exit();
             }
             WindowEvent::Focused(focused) => {
-                if let Err(error) = self.runner.handle_host_event(HostEvent::Focused(focused)) {
-                    self.fail(event_loop, error);
+                if !self.handle_host_event(event_loop, HostEvent::WindowFocused(focused)) {
                     return;
                 }
                 self.request_redraw_if_needed();
             }
             WindowEvent::SurfaceResized(size) => {
-                if let Err(error) = self.runner.handle_host_event(HostEvent::Resized(Size::new(
-                    size.width.max(1) as f32,
-                    size.height.max(1) as f32,
-                ))) {
-                    self.fail(event_loop, error);
+                if !self.handle_host_event(
+                    event_loop,
+                    HostEvent::Resized(Size::new(
+                        size.width.max(1) as f32,
+                        size.height.max(1) as f32,
+                    )),
+                ) {
                     return;
                 }
                 self.apply_content_size_if_needed();
+                self.request_redraw_if_needed();
+            }
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                if !self.handle_host_event(
+                    event_loop,
+                    HostEvent::ScaleFactorChanged(scale_factor as f32),
+                ) {
+                    return;
+                }
+                self.request_redraw_if_needed();
+            }
+            WindowEvent::PointerMoved { position, .. } => {
+                let position = point_from_physical(position);
+                self.last_pointer_position = position;
+                if !self
+                    .handle_host_event(event_loop, HostEvent::Mouse(MouseEvent::Moved { position }))
+                {
+                    return;
+                }
+                self.request_redraw_if_needed();
+            }
+            WindowEvent::PointerEntered { position, .. } => {
+                self.last_pointer_position = point_from_physical(position);
+                if !self.handle_host_event(event_loop, HostEvent::Mouse(MouseEvent::Entered)) {
+                    return;
+                }
+                self.request_redraw_if_needed();
+            }
+            WindowEvent::PointerLeft { position, .. } => {
+                if let Some(position) = position {
+                    self.last_pointer_position = point_from_physical(position);
+                }
+                if !self.handle_host_event(event_loop, HostEvent::Mouse(MouseEvent::Left)) {
+                    return;
+                }
+                self.request_redraw_if_needed();
+            }
+            WindowEvent::PointerButton {
+                state,
+                position,
+                button,
+                ..
+            } => {
+                let position = point_from_physical(position);
+                self.last_pointer_position = position;
+                let button = mouse_button_from_source(button);
+                let event = match state {
+                    ElementState::Pressed => MouseEvent::Pressed { button, position },
+                    ElementState::Released => MouseEvent::Released { button, position },
+                };
+                if !self.handle_host_event(event_loop, HostEvent::Mouse(event)) {
+                    return;
+                }
+                self.request_redraw_if_needed();
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let delta = mouse_wheel_delta(delta);
+                if !self.handle_host_event(
+                    event_loop,
+                    HostEvent::Mouse(MouseEvent::Wheel {
+                        delta,
+                        position: self.last_pointer_position,
+                    }),
+                ) {
+                    return;
+                }
+                self.request_redraw_if_needed();
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                let winit::event::KeyEvent {
+                    logical_key,
+                    state,
+                    text,
+                    ..
+                } = event;
+                let key = key_from_winit(logical_key);
+                let event = match state {
+                    ElementState::Pressed => KeyboardEvent::Pressed { key },
+                    ElementState::Released => KeyboardEvent::Released { key },
+                };
+                if !self.handle_host_event(event_loop, HostEvent::Keyboard(event)) {
+                    return;
+                }
+                if state == ElementState::Pressed {
+                    if let Some(text) = text {
+                        let text = text.to_string();
+                        if !text.is_empty()
+                            && !self.handle_host_event(
+                                event_loop,
+                                HostEvent::Keyboard(KeyboardEvent::TextInput(text)),
+                            )
+                        {
+                            return;
+                        }
+                    }
+                }
+                self.request_redraw_if_needed();
+            }
+            WindowEvent::Ime(Ime::Commit(text)) => {
+                if !text.is_empty()
+                    && !self.handle_host_event(
+                        event_loop,
+                        HostEvent::Keyboard(KeyboardEvent::TextInput(text)),
+                    )
+                {
+                    return;
+                }
                 self.request_redraw_if_needed();
             }
             WindowEvent::RedrawRequested => {
@@ -456,7 +579,7 @@ where
 
 // TODO(v0.3): guard against resize-relayout-resize feedback loops
 // TODO(v0.6): integrate reserved/work-area awareness
-// TODO(v0.4): input events routing
+// TODO(v0.4): add start_drag support for frameless windows
 // TODO(v0.7): hybrid host compatibility
 
 fn valid_size(size: Option<Size>) -> Option<Size> {
@@ -593,6 +716,49 @@ fn logical_size(size: Size) -> LogicalSize<f64> {
 
 fn logical_position(position: Point) -> LogicalPosition<f64> {
     LogicalPosition::new(position.x as f64, position.y as f64)
+}
+
+fn point_from_physical(position: winit::dpi::PhysicalPosition<f64>) -> Point {
+    Point::new(position.x as f32, position.y as f32)
+}
+
+fn mouse_button_from_source(button: ButtonSource) -> MouseButton {
+    match button {
+        ButtonSource::Mouse(button) => mouse_button_from_winit(button),
+        ButtonSource::Touch { .. } => MouseButton::Left,
+        ButtonSource::TabletTool { .. } => MouseButton::Other(0),
+        ButtonSource::Unknown(button) => MouseButton::Other(button),
+    }
+}
+
+fn mouse_button_from_winit(button: WinitMouseButton) -> MouseButton {
+    match button {
+        WinitMouseButton::Left => MouseButton::Left,
+        WinitMouseButton::Right => MouseButton::Right,
+        WinitMouseButton::Middle => MouseButton::Middle,
+        WinitMouseButton::Back => MouseButton::Back,
+        WinitMouseButton::Forward => MouseButton::Forward,
+        button => MouseButton::Other(button as u16),
+    }
+}
+
+fn mouse_wheel_delta(delta: MouseScrollDelta) -> MouseWheelDelta {
+    match delta {
+        MouseScrollDelta::LineDelta(x, y) => MouseWheelDelta::LineDelta { x, y },
+        MouseScrollDelta::PixelDelta(position) => MouseWheelDelta::PixelDelta {
+            x: position.x as f32,
+            y: position.y as f32,
+        },
+    }
+}
+
+fn key_from_winit(key: WinitKey) -> Key {
+    match key {
+        WinitKey::Character(value) => Key::Character(value.to_string()),
+        WinitKey::Named(value) => Key::Named(format!("{value:?}")),
+        WinitKey::Dead(value) => Key::Dead(value),
+        WinitKey::Unidentified(value) => Key::Unidentified(format!("{value:?}")),
+    }
 }
 
 fn same_size(a: Size, b: Size) -> bool {

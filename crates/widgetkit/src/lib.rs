@@ -23,8 +23,8 @@ pub mod render {
 
 #[cfg(feature = "canvas")]
 pub use widgetkit_core::{
-    Color, Constraints, Duration, HostEvent, Insets, InstanceId, Point, Rect, Result, Size,
-    SizePolicy, TaskId, TimerId, WidgetId,
+    Color, Constraints, Duration, HostEvent, Insets, InstanceId, Key, KeyboardEvent, MouseButton,
+    MouseEvent, MouseWheelDelta, Point, Rect, Result, Size, SizePolicy, TaskId, TimerId, WidgetId,
 };
 #[cfg(feature = "windows")]
 pub use widgetkit_host_windows::{Anchor, PositionConfig, WindowConfig, WindowsHost};
@@ -44,9 +44,10 @@ pub mod prelude {
     pub use crate::{Anchor, PositionConfig, WindowConfig, WindowsHost};
     pub use crate::{
         Canvas, Color, Constraints, DisposeCtx, Duration, Event, HostEvent, Insets, InstanceId,
-        LayoutCtx, MountCtx, Point, Rect, RenderCtx, Result, Scheduler, Size, SizePolicy,
-        SoftwareRenderer, StartCtx, StopCtx, Stroke, TaskId, Tasks, TextAlign, TextBaseline,
-        TextMetrics, TextStyle, TimerId, UpdateCtx, Widget, WidgetApp, WidgetId,
+        Key, KeyboardEvent, LayoutCtx, MountCtx, MouseButton, MouseEvent, MouseWheelDelta, Point,
+        Rect, RenderCtx, Result, Scheduler, Size, SizePolicy, SoftwareRenderer, StartCtx, StopCtx,
+        Stroke, TaskId, Tasks, TextAlign, TextBaseline, TextMetrics, TextStyle, TimerId, UpdateCtx,
+        Widget, WidgetApp, WidgetId,
     };
 }
 
