@@ -1,4 +1,7 @@
-use crate::{internal::RuntimeServices, scheduler::Scheduler, tasks::Tasks, widget::Widget};
+use crate::{
+    internal::RuntimeServices, scheduler::Scheduler, tasks::Tasks, widget::Widget,
+    window::WindowControl,
+};
 use std::{marker::PhantomData, ptr::NonNull};
 use widgetkit_core::{Constraints, InstanceId, Size, WidgetId};
 use widgetkit_render::{Canvas, TextMetrics, TextStyle};
@@ -97,6 +100,11 @@ where
         Tasks::new(services.tasks.as_mut())
     }
 
+    pub fn window(&mut self) -> WindowControl {
+        let services = self.services_mut();
+        services.window.control(services.dispatcher.wake.clone())
+    }
+
     fn services_mut(&mut self) -> &mut RuntimeServices<W::Message> {
         unsafe { self.services.as_mut() }
     }
@@ -164,6 +172,11 @@ where
     pub fn tasks(&mut self) -> Tasks<'_, W::Message> {
         let services = self.services_mut();
         Tasks::new(services.tasks.as_mut())
+    }
+
+    pub fn window(&mut self) -> WindowControl {
+        let services = self.services_mut();
+        services.window.control(services.dispatcher.wake.clone())
     }
 
     fn services_mut(&mut self) -> &mut RuntimeServices<W::Message> {

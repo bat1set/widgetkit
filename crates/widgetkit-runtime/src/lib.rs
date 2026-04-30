@@ -22,6 +22,7 @@ mod internal;
 mod scheduler;
 mod tasks;
 mod widget;
+mod window;
 
 pub use app::{AppRunner, WidgetApp};
 pub use context::{DisposeCtx, LayoutCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx};
@@ -30,11 +31,12 @@ pub use host::HostRunner;
 pub use scheduler::Scheduler;
 pub use tasks::Tasks;
 pub use widget::Widget;
+pub use window::{WindowCommand, WindowControl};
 
 pub use widgetkit_core;
 
 // TODO(v0.3): guard against resize-relayout-resize feedback loops
-// TODO(v0.4): route richer host/input events
+// TODO(v0.4): define hidden-window behavior separately from widget stop/dispose
 // TODO(v0.5): connect sizing contracts to declarative layout
 // TODO(v0.7): allow lifecycle integration with hybrid/native-web host
 // TODO(v0.8): support restart-safe instance isolation guarantees

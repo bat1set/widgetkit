@@ -4,6 +4,7 @@ use crate::{
     host::HostRunner,
     internal::{DispatchToken, Dispatcher, RuntimeEvent, RuntimeServices, WakeHandle},
     widget::Widget,
+    window::WindowCommand,
 };
 use crossbeam_channel::{Receiver, TryRecvError, unbounded};
 use widgetkit_core::{Constraints, Error, HostEvent, InstanceId, Result, Size, WidgetId};
@@ -182,6 +183,18 @@ where
         F: Fn() + Send + Sync + 'static,
     {
         self.services.dispatcher.wake.set(wake);
+    }
+
+    pub fn take_window_commands(&mut self) -> Vec<WindowCommand> {
+        self.services.window.drain()
+    }
+
+    pub fn set_window_visible(&mut self, visible: bool) {
+        self.services.window.set_visible(visible);
+    }
+
+    pub fn window_visible(&self) -> bool {
+        self.services.window.is_visible()
     }
 
     pub fn initialize(&mut self, surface_size: Size) -> Result<()> {

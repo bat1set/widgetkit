@@ -35,7 +35,7 @@ pub use widgetkit_render::{
 #[cfg(feature = "canvas")]
 pub use widgetkit_runtime::{
     AppRunner, DisposeCtx, Event, HostRunner, LayoutCtx, MountCtx, RenderCtx, Scheduler, StartCtx,
-    StopCtx, Tasks, UpdateCtx, Widget, WidgetApp,
+    StopCtx, Tasks, UpdateCtx, Widget, WidgetApp, WindowCommand, WindowControl,
 };
 
 #[cfg(feature = "canvas")]
@@ -47,7 +47,7 @@ pub mod prelude {
         Key, KeyboardEvent, LayoutCtx, MountCtx, MouseButton, MouseEvent, MouseWheelDelta, Point,
         Rect, RenderCtx, Result, Scheduler, Size, SizePolicy, SoftwareRenderer, StartCtx, StopCtx,
         Stroke, TaskId, Tasks, TextAlign, TextBaseline, TextMetrics, TextStyle, TimerId, UpdateCtx,
-        Widget, WidgetApp, WidgetId,
+        Widget, WidgetApp, WidgetId, WindowControl,
     };
 }
 

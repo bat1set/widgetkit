@@ -4,7 +4,7 @@ use widgetkit_core::{
     Constraints, Error, HostEvent, Key, KeyboardEvent, MouseButton, MouseEvent, MouseWheelDelta,
     Point, Result, Size, SizePolicy,
 };
-use widgetkit_runtime::{AppRunner, HostRunner, Widget};
+use widgetkit_runtime::{AppRunner, HostRunner, Widget, WindowCommand};
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalPosition, LogicalSize};
 use winit::event::{
@@ -267,6 +267,7 @@ where
     exit_error: Option<Error>,
     last_content_size: Option<Size>,
     last_pointer_position: Point,
+    window_visible: bool,
 }
 
 impl<W, R> WindowsApp<W, R>
@@ -274,7 +275,9 @@ where
     W: Widget,
     R: widgetkit_render::Renderer,
 {
-    fn new(host: WindowsHost, runner: AppRunner<W, R>) -> Self {
+    fn new(host: WindowsHost, mut runner: AppRunner<W, R>) -> Self {
+        let window_visible = host.config.normalized().visible;
+        runner.set_window_visible(window_visible);
         Self {
             host,
             runner,
@@ -283,6 +286,7 @@ where
             exit_error: None,
             last_content_size: None,
             last_pointer_position: Point::new(0.0, 0.0),
+            window_visible,
         }
     }
 
@@ -300,6 +304,14 @@ where
         true
     }
 
+    fn dispatch_host_event(&mut self, event_loop: &dyn ActiveEventLoop, event: HostEvent) -> bool {
+        if !self.handle_host_event(event_loop, event) {
+            return false;
+        }
+        self.apply_window_commands(event_loop);
+        true
+    }
+
     fn request_redraw_if_needed(&mut self) {
         if self.runner.take_redraw_request() {
             if let Some(window) = self.window.as_ref() {
@@ -313,8 +325,57 @@ where
             self.fail(event_loop, error);
             return;
         }
+        self.apply_window_commands(event_loop);
         self.apply_content_size_if_needed();
         self.request_redraw_if_needed();
+    }
+
+    fn apply_window_commands(&mut self, event_loop: &dyn ActiveEventLoop) {
+        let Some(window) = self.window.as_ref().cloned() else {
+            return;
+        };
+        let commands = self.runner.take_window_commands();
+        if commands.is_empty() {
+            return;
+        }
+
+        for command in commands {
+            match command {
+                WindowCommand::StartDrag => {
+                    let _ = window.drag_window();
+                }
+                WindowCommand::SetPosition(position) => {
+                    window.set_outer_position(logical_position(position).into());
+                }
+                WindowCommand::SetSize(size) => {
+                    if let Some(actual_size) =
+                        window.request_surface_size(logical_size(size).into())
+                    {
+                        self.runner.set_surface_size(Size::new(
+                            actual_size.width.max(1) as f32,
+                            actual_size.height.max(1) as f32,
+                        ));
+                    }
+                }
+                WindowCommand::SetVisible(visible) => {
+                    window.set_visible(visible);
+                    self.runner.set_window_visible(visible);
+                    if self.window_visible != visible {
+                        self.window_visible = visible;
+                        if !self.handle_host_event(event_loop, HostEvent::WindowVisible(visible)) {
+                            return;
+                        }
+                    }
+                }
+                WindowCommand::SetAlwaysOnTop(always_on_top) => {
+                    window.set_window_level(if always_on_top {
+                        WindowLevel::AlwaysOnTop
+                    } else {
+                        WindowLevel::Normal
+                    });
+                }
+            }
+        }
     }
 
     fn create_window(&mut self, event_loop: &dyn ActiveEventLoop) -> Result<Rc<dyn Window>> {
@@ -425,7 +486,7 @@ where
 
         match event {
             WindowEvent::CloseRequested => {
-                if !self.handle_host_event(event_loop, HostEvent::CloseRequested) {
+                if !self.dispatch_host_event(event_loop, HostEvent::CloseRequested) {
                     return;
                 }
                 if let Err(error) = self.runner.shutdown() {
@@ -435,13 +496,13 @@ where
                 event_loop.exit();
             }
             WindowEvent::Focused(focused) => {
-                if !self.handle_host_event(event_loop, HostEvent::WindowFocused(focused)) {
+                if !self.dispatch_host_event(event_loop, HostEvent::WindowFocused(focused)) {
                     return;
                 }
                 self.request_redraw_if_needed();
             }
             WindowEvent::SurfaceResized(size) => {
-                if !self.handle_host_event(
+                if !self.dispatch_host_event(
                     event_loop,
                     HostEvent::Resized(Size::new(
                         size.width.max(1) as f32,
@@ -454,7 +515,7 @@ where
                 self.request_redraw_if_needed();
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                if !self.handle_host_event(
+                if !self.dispatch_host_event(
                     event_loop,
                     HostEvent::ScaleFactorChanged(scale_factor as f32),
                 ) {
@@ -465,16 +526,17 @@ where
             WindowEvent::PointerMoved { position, .. } => {
                 let position = point_from_physical(position);
                 self.last_pointer_position = position;
-                if !self
-                    .handle_host_event(event_loop, HostEvent::Mouse(MouseEvent::Moved { position }))
-                {
+                if !self.dispatch_host_event(
+                    event_loop,
+                    HostEvent::Mouse(MouseEvent::Moved { position }),
+                ) {
                     return;
                 }
                 self.request_redraw_if_needed();
             }
             WindowEvent::PointerEntered { position, .. } => {
                 self.last_pointer_position = point_from_physical(position);
-                if !self.handle_host_event(event_loop, HostEvent::Mouse(MouseEvent::Entered)) {
+                if !self.dispatch_host_event(event_loop, HostEvent::Mouse(MouseEvent::Entered)) {
                     return;
                 }
                 self.request_redraw_if_needed();
@@ -483,7 +545,7 @@ where
                 if let Some(position) = position {
                     self.last_pointer_position = point_from_physical(position);
                 }
-                if !self.handle_host_event(event_loop, HostEvent::Mouse(MouseEvent::Left)) {
+                if !self.dispatch_host_event(event_loop, HostEvent::Mouse(MouseEvent::Left)) {
                     return;
                 }
                 self.request_redraw_if_needed();
@@ -501,14 +563,14 @@ where
                     ElementState::Pressed => MouseEvent::Pressed { button, position },
                     ElementState::Released => MouseEvent::Released { button, position },
                 };
-                if !self.handle_host_event(event_loop, HostEvent::Mouse(event)) {
+                if !self.dispatch_host_event(event_loop, HostEvent::Mouse(event)) {
                     return;
                 }
                 self.request_redraw_if_needed();
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 let delta = mouse_wheel_delta(delta);
-                if !self.handle_host_event(
+                if !self.dispatch_host_event(
                     event_loop,
                     HostEvent::Mouse(MouseEvent::Wheel {
                         delta,
@@ -531,14 +593,14 @@ where
                     ElementState::Pressed => KeyboardEvent::Pressed { key },
                     ElementState::Released => KeyboardEvent::Released { key },
                 };
-                if !self.handle_host_event(event_loop, HostEvent::Keyboard(event)) {
+                if !self.dispatch_host_event(event_loop, HostEvent::Keyboard(event)) {
                     return;
                 }
                 if state == ElementState::Pressed {
                     if let Some(text) = text {
                         let text = text.to_string();
                         if !text.is_empty()
-                            && !self.handle_host_event(
+                            && !self.dispatch_host_event(
                                 event_loop,
                                 HostEvent::Keyboard(KeyboardEvent::TextInput(text)),
                             )
@@ -551,7 +613,7 @@ where
             }
             WindowEvent::Ime(Ime::Commit(text)) => {
                 if !text.is_empty()
-                    && !self.handle_host_event(
+                    && !self.dispatch_host_event(
                         event_loop,
                         HostEvent::Keyboard(KeyboardEvent::TextInput(text)),
                     )
@@ -579,7 +641,7 @@ where
 
 // TODO(v0.3): guard against resize-relayout-resize feedback loops
 // TODO(v0.6): integrate reserved/work-area awareness
-// TODO(v0.4): add start_drag support for frameless windows
+// TODO(v0.4): add close behavior policy: Exit / HideWindow / AskRuntime
 // TODO(v0.7): hybrid host compatibility
 
 fn valid_size(size: Option<Size>) -> Option<Size> {

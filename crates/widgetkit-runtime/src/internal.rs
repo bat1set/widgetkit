@@ -1,6 +1,7 @@
 use crate::{
     scheduler::SchedulerState,
     tasks::{TaskBackend, task_backend},
+    window::WindowCommandQueue,
 };
 use crossbeam_channel::Sender;
 use std::sync::{Arc, Mutex};
@@ -31,6 +32,7 @@ pub(crate) struct RuntimeServices<M> {
     pub(crate) dispatcher: Dispatcher<M>,
     pub(crate) scheduler: SchedulerState<M>,
     pub(crate) tasks: Box<dyn TaskBackend<M>>,
+    pub(crate) window: WindowCommandQueue,
     invalidation: InvalidationState,
 }
 
@@ -43,6 +45,7 @@ where
             dispatcher: dispatcher.clone(),
             scheduler: SchedulerState::new(dispatcher.clone()),
             tasks: task_backend(dispatcher),
+            window: WindowCommandQueue::new(true),
             invalidation: InvalidationState::default(),
         }
     }

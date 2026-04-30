@@ -1,6 +1,6 @@
 use crate::{
     AppRunner, DisposeCtx, Event, LayoutCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx,
-    Widget, internal::DispatchToken,
+    Widget, WindowCommand, internal::DispatchToken,
 };
 use futures::future;
 use std::{
@@ -490,4 +490,61 @@ fn default_preferred_size_uses_constrained_available_size() {
         runner.preferred_size(constraints),
         Some(Size::new(200.0, 100.0))
     );
+}
+
+struct WindowCommandWidget;
+
+enum WindowCommandMsg {
+    Run,
+}
+
+impl Widget for WindowCommandWidget {
+    type State = ();
+    type Message = WindowCommandMsg;
+
+    fn mount(&mut self, _ctx: &mut MountCtx<Self>) -> Self::State {}
+
+    fn start(&mut self, _state: &mut Self::State, ctx: &mut StartCtx<Self>) {
+        ctx.post(WindowCommandMsg::Run);
+    }
+
+    fn update(
+        &mut self,
+        _state: &mut Self::State,
+        event: Event<Self::Message>,
+        ctx: &mut UpdateCtx<Self>,
+    ) {
+        if let Event::Message(WindowCommandMsg::Run) = event {
+            let window = ctx.window();
+            assert!(window.is_visible());
+            window.start_drag();
+            window.set_position(Point::new(12.0, 24.0));
+            window.set_size(Size::new(360.0, 140.0));
+            window.set_always_on_top(true);
+            window.hide();
+            assert!(!window.is_visible());
+        }
+    }
+}
+
+#[test]
+fn update_ctx_exposes_window_control_commands() {
+    let mut runner = AppRunner::new(
+        "window-control",
+        WindowCommandWidget,
+        SoftwareRenderer::new(),
+    );
+    runner.initialize(Size::new(32.0, 32.0)).unwrap();
+
+    assert_eq!(
+        runner.take_window_commands(),
+        vec![
+            WindowCommand::StartDrag,
+            WindowCommand::SetPosition(Point::new(12.0, 24.0)),
+            WindowCommand::SetSize(Size::new(360.0, 140.0)),
+            WindowCommand::SetAlwaysOnTop(true),
+            WindowCommand::SetVisible(false),
+        ]
+    );
+    assert!(!runner.window_visible());
 }
