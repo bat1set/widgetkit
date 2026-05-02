@@ -1,5 +1,7 @@
 use crate::{
-    context::{DisposeCtx, LayoutCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx},
+    context::{
+        DisposeCtx, HitTestCtx, LayoutCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx,
+    },
     event::Event,
     host::HostRunner,
     internal::{DispatchToken, Dispatcher, RuntimeEvent, RuntimeServices, WakeHandle},
@@ -7,7 +9,9 @@ use crate::{
     window::WindowCommand,
 };
 use crossbeam_channel::{Receiver, TryRecvError, unbounded};
-use widgetkit_core::{Constraints, Error, HostEvent, InstanceId, Result, Size, WidgetId};
+use widgetkit_core::{
+    Constraints, Error, HitTest, HostEvent, InstanceId, Point, Result, Size, WidgetId,
+};
 use widgetkit_render::{Canvas, RenderSurface, Renderer};
 
 /// Application bootstrap for a single widget instance bound to one host and one renderer.
@@ -178,6 +182,17 @@ where
         })
     }
 
+    pub fn hit_test(&self, position: Point) -> Option<HitTest> {
+        if !self.initialized || self.shut_down {
+            return None;
+        }
+
+        self.state.as_ref().map(|state| {
+            let ctx = HitTestCtx::new(self.widget_id, self.instance_id, self.surface_size);
+            self.widget.hit_test(state, position, &ctx)
+        })
+    }
+
     pub fn attach_waker<F>(&mut self, wake: F)
     where
         F: Fn() + Send + Sync + 'static,
@@ -272,7 +287,11 @@ where
     }
 
     pub fn render(&mut self, surface: &mut dyn RenderSurface) -> Result<()> {
-        if !self.initialized || self.shut_down || !self.services.begin_render() {
+        if !self.initialized
+            || self.shut_down
+            || !self.services.window.is_visible()
+            || !self.services.begin_render()
+        {
             return Ok(());
         }
 

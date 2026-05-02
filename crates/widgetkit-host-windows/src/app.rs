@@ -31,6 +31,13 @@ pub enum Anchor {
     BottomRight,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CloseBehavior {
+    Exit,
+    HideWindow,
+    AskRuntime,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PositionConfig {
     pub point: Option<Point>,
@@ -86,6 +93,7 @@ pub struct WindowConfig {
     pub transparent: bool,
     pub always_on_top: bool,
     pub visible: bool,
+    pub close_behavior: CloseBehavior,
     pub position: PositionConfig,
 }
 
@@ -122,6 +130,7 @@ impl Default for WindowConfig {
             transparent: false,
             always_on_top: false,
             visible: true,
+            close_behavior: CloseBehavior::Exit,
             position: PositionConfig::default(),
         }
     }
@@ -192,6 +201,11 @@ impl WindowsHost {
 
     pub fn visible(mut self, visible: bool) -> Self {
         self.config.visible = visible;
+        self
+    }
+
+    pub fn close_behavior(mut self, close_behavior: CloseBehavior) -> Self {
+        self.config.close_behavior = close_behavior;
         self
     }
 
@@ -312,7 +326,24 @@ where
         true
     }
 
+    fn set_window_visible(&mut self, event_loop: &dyn ActiveEventLoop, visible: bool) -> bool {
+        if let Some(window) = self.window.as_ref() {
+            window.set_visible(visible);
+        }
+        self.runner.set_window_visible(visible);
+
+        if self.window_visible == visible {
+            return true;
+        }
+
+        self.window_visible = visible;
+        self.handle_host_event(event_loop, HostEvent::WindowVisible(visible))
+    }
+
     fn request_redraw_if_needed(&mut self) {
+        if !self.runner.window_visible() {
+            return;
+        }
         if self.runner.take_redraw_request() {
             if let Some(window) = self.window.as_ref() {
                 window.request_redraw();
@@ -358,13 +389,8 @@ where
                     }
                 }
                 WindowCommand::SetVisible(visible) => {
-                    window.set_visible(visible);
-                    self.runner.set_window_visible(visible);
-                    if self.window_visible != visible {
-                        self.window_visible = visible;
-                        if !self.handle_host_event(event_loop, HostEvent::WindowVisible(visible)) {
-                            return;
-                        }
+                    if !self.set_window_visible(event_loop, visible) {
+                        return;
                     }
                 }
                 WindowCommand::SetAlwaysOnTop(always_on_top) => {
@@ -463,6 +489,11 @@ where
 
         self.window = Some(window);
         self.surface = Some(surface);
+        if !self.window_visible
+            && !self.dispatch_host_event(event_loop, HostEvent::WindowVisible(false))
+        {
+            return;
+        }
         self.apply_content_size_if_needed();
         self.request_redraw_if_needed();
     }
@@ -489,11 +520,21 @@ where
                 if !self.dispatch_host_event(event_loop, HostEvent::CloseRequested) {
                     return;
                 }
-                if let Err(error) = self.runner.shutdown() {
-                    self.fail(event_loop, error);
-                    return;
+                match self.host.config.normalized().close_behavior {
+                    CloseBehavior::Exit => {
+                        if let Err(error) = self.runner.shutdown() {
+                            self.fail(event_loop, error);
+                            return;
+                        }
+                        event_loop.exit();
+                    }
+                    CloseBehavior::HideWindow => {
+                        if !self.set_window_visible(event_loop, false) {
+                            return;
+                        }
+                    }
+                    CloseBehavior::AskRuntime => {}
                 }
-                event_loop.exit();
             }
             WindowEvent::Focused(focused) => {
                 if !self.dispatch_host_event(event_loop, HostEvent::WindowFocused(focused)) {
@@ -623,6 +664,9 @@ where
                 self.request_redraw_if_needed();
             }
             WindowEvent::RedrawRequested => {
+                if !self.runner.window_visible() {
+                    return;
+                }
                 let Some(surface) = self.surface.as_mut() else {
                     return;
                 };
@@ -641,7 +685,7 @@ where
 
 // TODO(v0.3): guard against resize-relayout-resize feedback loops
 // TODO(v0.6): integrate reserved/work-area awareness
-// TODO(v0.4): add close behavior policy: Exit / HideWindow / AskRuntime
+// TODO(v0.4): add experimental click-through support
 // TODO(v0.7): hybrid host compatibility
 
 fn valid_size(size: Option<Size>) -> Option<Size> {
@@ -846,8 +890,8 @@ fn content_resize_target(
 #[cfg(test)]
 mod tests {
     use super::{
-        Anchor, PositionConfig, RectLike, WindowConfig, WindowsHost, anchor_position,
-        window_attributes,
+        Anchor, CloseBehavior, PositionConfig, RectLike, WindowConfig, WindowsHost,
+        anchor_position, window_attributes,
     };
     use widgetkit_core::SizePolicy;
     use widgetkit_core::{Point, Size};
@@ -874,6 +918,7 @@ mod tests {
             transparent: true,
             always_on_top: true,
             visible: false,
+            close_behavior: CloseBehavior::HideWindow,
             position: PositionConfig::anchored(Anchor::TopRight).with_offset(Point::new(4.0, 8.0)),
         };
 
@@ -914,6 +959,7 @@ mod tests {
             .transparent(true)
             .always_on_top(true)
             .visible(false)
+            .close_behavior(CloseBehavior::HideWindow)
             .position(Point::new(20.0, 30.0))
             .anchor(Anchor::BottomRight)
             .offset(12.0, 16.0);
@@ -926,6 +972,7 @@ mod tests {
         assert!(host.config().transparent);
         assert!(host.config().always_on_top);
         assert!(!host.config().visible);
+        assert_eq!(host.config().close_behavior, CloseBehavior::HideWindow);
         assert_eq!(host.config().position.point, None);
         assert_eq!(host.config().position.anchor, Some(Anchor::BottomRight));
         assert_eq!(host.config().position.offset, Point::new(12.0, 16.0));
@@ -956,6 +1003,7 @@ mod tests {
                 transparent: true,
                 always_on_top: true,
                 visible: false,
+                close_behavior: CloseBehavior::HideWindow,
                 position: PositionConfig::at(Point::new(20.0, 30.0))
                     .with_offset(Point::new(12.0, 16.0)),
             },
@@ -1018,6 +1066,7 @@ mod tests {
             transparent: false,
             always_on_top: false,
             visible: true,
+            close_behavior: CloseBehavior::Exit,
             position: PositionConfig::default(),
         })
         .unwrap();

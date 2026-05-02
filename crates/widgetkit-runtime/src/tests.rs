@@ -9,7 +9,7 @@ use std::{
     thread,
     time::{Duration as StdDuration, Instant},
 };
-use widgetkit_core::{Color, Constraints, Point, Rect, Result, Size};
+use widgetkit_core::{Color, Constraints, HitTest, Point, Rect, Result, Size};
 use widgetkit_render::{Canvas, RenderSurface, SoftwareRenderer, TextStyle};
 
 #[derive(Default)]
@@ -180,6 +180,32 @@ fn scheduler_routes_messages_and_reaps_completed_timers() {
     runner.process_pending().unwrap();
     assert_eq!(*counts.lock().unwrap(), snapshot);
     assert_eq!(runner.scheduler_active_count(), 0);
+}
+
+#[test]
+fn scheduler_keeps_running_while_window_is_hidden() {
+    let counts = Arc::new(Mutex::new((0, 0)));
+    let widget = SchedulerWidget {
+        counts: Arc::clone(&counts),
+    };
+    let mut runner = AppRunner::new("hidden-scheduler", widget, SoftwareRenderer::new());
+    runner.initialize(Size::new(32.0, 32.0)).unwrap();
+    runner.set_window_visible(false);
+
+    let deadline = Instant::now() + StdDuration::from_millis(100);
+    while {
+        let snapshot = *counts.lock().unwrap();
+        (snapshot.0 < 1 || snapshot.1 < 1) && Instant::now() < deadline
+    } {
+        thread::sleep(StdDuration::from_millis(5));
+        runner.process_pending().unwrap();
+    }
+
+    let snapshot = *counts.lock().unwrap();
+    runner.shutdown().unwrap();
+
+    assert_eq!(snapshot.0, 1);
+    assert!(snapshot.1 >= 1);
 }
 
 struct TaskWidget {
@@ -425,6 +451,28 @@ fn shutdown_clears_pending_redraw_and_skips_late_render_calls() {
     assert_eq!(*renders.lock().unwrap(), 0);
 }
 
+#[test]
+fn hidden_window_state_skips_render_without_stopping_runtime() {
+    let renders = Arc::new(Mutex::new(0));
+    let widget = LateRenderWidget {
+        renders: Arc::clone(&renders),
+    };
+    let mut runner = AppRunner::new("hidden-render", widget, SoftwareRenderer::new());
+    runner.initialize(Size::new(32.0, 32.0)).unwrap();
+    runner.set_window_visible(false);
+
+    let mut surface = MemorySurface::new(32, 32);
+    runner.render(&mut surface).unwrap();
+
+    assert_eq!(*renders.lock().unwrap(), 0);
+    assert!(runner.needs_redraw());
+
+    runner.set_window_visible(true);
+    runner.render(&mut surface).unwrap();
+
+    assert_eq!(*renders.lock().unwrap(), 1);
+}
+
 struct PreferredSizeWidget;
 
 enum PreferredSizeMsg {}
@@ -547,4 +595,42 @@ fn update_ctx_exposes_window_control_commands() {
         ]
     );
     assert!(!runner.window_visible());
+}
+
+struct HitTestWidget;
+
+enum HitTestMsg {}
+
+impl Widget for HitTestWidget {
+    type State = Rect;
+    type Message = HitTestMsg;
+
+    fn mount(&mut self, _ctx: &mut MountCtx<Self>) -> Self::State {
+        Rect::xywh(8.0, 8.0, 24.0, 16.0)
+    }
+
+    fn hit_test(
+        &self,
+        state: &Self::State,
+        position: Point,
+        _ctx: &crate::HitTestCtx<Self>,
+    ) -> HitTest {
+        if state.contains(position) {
+            HitTest::Draggable
+        } else {
+            HitTest::Miss
+        }
+    }
+}
+
+#[test]
+fn app_runner_routes_hit_test_to_widget_hook() {
+    let mut runner = AppRunner::new("hit-test", HitTestWidget, SoftwareRenderer::new());
+    runner.initialize(Size::new(64.0, 32.0)).unwrap();
+
+    assert_eq!(
+        runner.hit_test(Point::new(12.0, 12.0)),
+        Some(HitTest::Draggable)
+    );
+    assert_eq!(runner.hit_test(Point::new(40.0, 12.0)), Some(HitTest::Miss));
 }

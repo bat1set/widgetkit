@@ -25,7 +25,9 @@ mod widget;
 mod window;
 
 pub use app::{AppRunner, WidgetApp};
-pub use context::{DisposeCtx, LayoutCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx};
+pub use context::{
+    DisposeCtx, HitTestCtx, LayoutCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx,
+};
 pub use event::Event;
 pub use host::HostRunner;
 pub use scheduler::Scheduler;

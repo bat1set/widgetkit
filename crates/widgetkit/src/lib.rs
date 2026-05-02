@@ -23,31 +23,35 @@ pub mod render {
 
 #[cfg(feature = "canvas")]
 pub use widgetkit_core::{
-    Color, Constraints, Duration, HostEvent, Insets, InstanceId, Key, KeyboardEvent, MouseButton,
-    MouseEvent, MouseWheelDelta, Point, Rect, Result, Size, SizePolicy, TaskId, TimerId, WidgetId,
+    Color, Constraints, Duration, HitTest, HostEvent, Insets, InstanceId, Key, KeyboardEvent,
+    MouseButton, MouseEvent, MouseWheelDelta, Point, Rect, ResizeEdge, Result, Size, SizePolicy,
+    TaskId, TimerId, WidgetId,
 };
 #[cfg(feature = "windows")]
-pub use widgetkit_host_windows::{Anchor, PositionConfig, WindowConfig, WindowsHost};
+pub use widgetkit_host_windows::{
+    Anchor, CloseBehavior, PositionConfig, WindowConfig, WindowsHost,
+};
 #[cfg(feature = "canvas")]
 pub use widgetkit_render::{
     Canvas, SoftwareRenderer, Stroke, TextAlign, TextBaseline, TextMetrics, TextStyle,
 };
 #[cfg(feature = "canvas")]
 pub use widgetkit_runtime::{
-    AppRunner, DisposeCtx, Event, HostRunner, LayoutCtx, MountCtx, RenderCtx, Scheduler, StartCtx,
-    StopCtx, Tasks, UpdateCtx, Widget, WidgetApp, WindowCommand, WindowControl,
+    AppRunner, DisposeCtx, Event, HitTestCtx, HostRunner, LayoutCtx, MountCtx, RenderCtx,
+    Scheduler, StartCtx, StopCtx, Tasks, UpdateCtx, Widget, WidgetApp, WindowCommand,
+    WindowControl,
 };
 
 #[cfg(feature = "canvas")]
 pub mod prelude {
     #[cfg(feature = "windows")]
-    pub use crate::{Anchor, PositionConfig, WindowConfig, WindowsHost};
+    pub use crate::{Anchor, CloseBehavior, PositionConfig, WindowConfig, WindowsHost};
     pub use crate::{
-        Canvas, Color, Constraints, DisposeCtx, Duration, Event, HostEvent, Insets, InstanceId,
-        Key, KeyboardEvent, LayoutCtx, MountCtx, MouseButton, MouseEvent, MouseWheelDelta, Point,
-        Rect, RenderCtx, Result, Scheduler, Size, SizePolicy, SoftwareRenderer, StartCtx, StopCtx,
-        Stroke, TaskId, Tasks, TextAlign, TextBaseline, TextMetrics, TextStyle, TimerId, UpdateCtx,
-        Widget, WidgetApp, WidgetId, WindowControl,
+        Canvas, Color, Constraints, DisposeCtx, Duration, Event, HitTest, HitTestCtx, HostEvent,
+        Insets, InstanceId, Key, KeyboardEvent, LayoutCtx, MountCtx, MouseButton, MouseEvent,
+        MouseWheelDelta, Point, Rect, RenderCtx, ResizeEdge, Result, Scheduler, Size, SizePolicy,
+        SoftwareRenderer, StartCtx, StopCtx, Stroke, TaskId, Tasks, TextAlign, TextBaseline,
+        TextMetrics, TextStyle, TimerId, UpdateCtx, Widget, WidgetApp, WidgetId, WindowControl,
     };
 }
 

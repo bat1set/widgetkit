@@ -1,6 +1,6 @@
 use crate::{
-    Color, Constraints, HostEvent, Insets, InstanceId, Key, KeyboardEvent, MouseButton, MouseEvent,
-    MouseWheelDelta, Point, Rect, Size, SizePolicy, TaskId, TimerId, WidgetId,
+    Color, Constraints, HitTest, HostEvent, Insets, InstanceId, Key, KeyboardEvent, MouseButton,
+    MouseEvent, MouseWheelDelta, Point, Rect, Size, SizePolicy, TaskId, TimerId, WidgetId,
 };
 
 #[test]
@@ -8,6 +8,17 @@ fn rect_inset_clamps_to_zero() {
     let rect = Rect::xywh(0.0, 0.0, 10.0, 5.0);
     let inset = rect.inset(Insets::all(10.0));
     assert_eq!(inset, Rect::xywh(10.0, 10.0, 0.0, 0.0));
+}
+
+#[test]
+fn rect_contains_and_hit_test_cover_basic_shape_input() {
+    let rect = Rect::xywh(4.0, 8.0, 12.0, 16.0);
+
+    assert!(rect.contains(Point::new(10.0, 12.0)));
+    assert!(!rect.contains(Point::new(16.0, 12.0)));
+    assert!(!rect.contains(Point::new(20.0, 12.0)));
+    assert_eq!(rect.hit_test(Point::new(10.0, 12.0)), HitTest::Hit);
+    assert_eq!(rect.hit_test(Point::new(20.0, 12.0)), HitTest::Miss);
 }
 
 #[test]

@@ -1,8 +1,10 @@
 use crate::{
-    context::{DisposeCtx, LayoutCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx},
+    context::{
+        DisposeCtx, HitTestCtx, LayoutCtx, MountCtx, RenderCtx, StartCtx, StopCtx, UpdateCtx,
+    },
     event::Event,
 };
-use widgetkit_core::Size;
+use widgetkit_core::{HitTest, Point, Size};
 use widgetkit_render::Canvas;
 
 pub trait Widget: Send + Sized + 'static {
@@ -23,6 +25,10 @@ pub trait Widget: Send + Sized + 'static {
 
     fn preferred_size(&self, _state: &Self::State, ctx: &LayoutCtx<Self>) -> Size {
         ctx.constrain(ctx.available_size())
+    }
+
+    fn hit_test(&self, _state: &Self::State, _position: Point, _ctx: &HitTestCtx<Self>) -> HitTest {
+        HitTest::Hit
     }
 
     fn render(&self, _state: &Self::State, _canvas: &mut Canvas, _ctx: &RenderCtx<Self>) {}

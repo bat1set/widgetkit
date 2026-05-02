@@ -1,3 +1,5 @@
+use crate::HitTest;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Point {
     pub x: f32,
@@ -71,6 +73,21 @@ impl Rect {
         let width = (self.width() - insets.left - insets.right).max(0.0);
         let height = (self.height() - insets.top - insets.bottom).max(0.0);
         Self::xywh(x, y, width, height)
+    }
+
+    pub fn contains(self, point: Point) -> bool {
+        if self.size.is_empty() {
+            return false;
+        }
+
+        point.x >= self.x()
+            && point.x < self.right()
+            && point.y >= self.y()
+            && point.y < self.bottom()
+    }
+
+    pub fn hit_test(self, point: Point) -> HitTest {
+        HitTest::hit_if(self.contains(point))
     }
 }
 

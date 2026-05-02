@@ -3,7 +3,7 @@ use crate::{
     window::WindowControl,
 };
 use std::{marker::PhantomData, ptr::NonNull};
-use widgetkit_core::{Constraints, InstanceId, Size, WidgetId};
+use widgetkit_core::{Constraints, InstanceId, Rect, Size, WidgetId};
 use widgetkit_render::{Canvas, TextMetrics, TextStyle};
 
 pub struct MountCtx<W>
@@ -272,6 +272,46 @@ where
 
     pub fn measure_text(&self, text: impl AsRef<str>, style: TextStyle) -> TextMetrics {
         Canvas::new(self.available_size).measure_text(text, &style)
+    }
+}
+
+pub struct HitTestCtx<W>
+where
+    W: Widget,
+{
+    widget_id: WidgetId,
+    instance_id: InstanceId,
+    surface_size: Size,
+    _marker: PhantomData<fn() -> W>,
+}
+
+impl<W> HitTestCtx<W>
+where
+    W: Widget,
+{
+    pub(crate) fn new(widget_id: WidgetId, instance_id: InstanceId, surface_size: Size) -> Self {
+        Self {
+            widget_id,
+            instance_id,
+            surface_size,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn widget_id(&self) -> WidgetId {
+        self.widget_id
+    }
+
+    pub fn instance_id(&self) -> InstanceId {
+        self.instance_id
+    }
+
+    pub fn surface_size(&self) -> Size {
+        self.surface_size
+    }
+
+    pub fn surface_bounds(&self) -> Rect {
+        Rect::new(widgetkit_core::Point::new(0.0, 0.0), self.surface_size)
     }
 }
 
